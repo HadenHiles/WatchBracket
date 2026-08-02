@@ -60,3 +60,5 @@ Browsers access one public origin through Caddy. Only the game API reaches Postg
 The Cast sender passes only a single-use launch token over the custom namespace. The receiver exchanges it once and then connects directly to the game API using an in-memory display bearer token. Set `CAST_RECEIVER_APP_ID` at web build time after completing Google Cast registration.
 
 See the [NAS quick start](docs/NAS-QUICKSTART.md), [deployment guide](docs/DEPLOYMENT.md), [security model](docs/SECURITY.md), and complete [product specification](docs/SPEC.md).
+
+Implementation notes are tracked per phase in [Milestone 6](docs/MILESTONE-6.md) and [Milestone 7](docs/MILESTONE-7.md).

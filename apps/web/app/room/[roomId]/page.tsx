@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import { io, type Socket } from "socket.io-client";
 import {
@@ -55,6 +55,7 @@ function useCountdown(deadline: string | null | undefined) {
 
 export default function RoomPage() {
   const { roomId } = useParams<{ roomId: string }>();
+  const router = useRouter();
   const [snapshot, setSnapshot] = useState<RoomSnapshot>();
   const [connection, setConnection] = useState<
     "connecting" | "connected" | "reconnecting"
@@ -69,6 +70,9 @@ export default function RoomPage() {
   const [rules, setRules] = useState<HouseRules>(presets.MOVIE_NIGHT);
   const [format, setFormat] = useState<8 | 12 | 16>(8);
   const [voteDuration, setVoteDuration] = useState(30);
+  const [winnerActionMessage, setWinnerActionMessage] = useState("");
+  const [tvSeasonPolicy, setTvSeasonPolicy] = useState<"FIRST" | "LATEST" | "ALL">("FIRST");
+  const [winnerActionPending, setWinnerActionPending] = useState(false);
   const sequence = useRef(0);
   const load = useCallback(async () => {
     try {
@@ -158,6 +162,27 @@ export default function RoomPage() {
       );
     }
   }
+  async function requestWinner() {
+    if (!window.confirm("Send this winning title to Seerr now?")) return;
+    setWinnerActionPending(true); setWinnerActionMessage("");
+    try {
+      const champion = snapshot?.tournament?.champion;
+      const result = await api<{ requested: boolean; status: string }>(`/api/rooms/${roomId}/winner/request`, {
+        method: "POST",
+        body: JSON.stringify({ confirm: true, ...(champion?.mediaType === "TV" ? { tvSeasonPolicy } : {}) }),
+      });
+      setWinnerActionMessage(result.requested ? `Request verified · ${result.status.toLowerCase()}` : "Request was not accepted.");
+      await load();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not request winner"); }
+    finally { setWinnerActionPending(false); }
+  }
+  async function replay() {
+    setWinnerActionPending(true);
+    try {
+      const result = await api<{ roomId: string }>(`/api/rooms/${roomId}/run-it-back`, { method: "POST", body: "{}" });
+      router.replace(`/room/${result.roomId}`);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not create replay room"); setWinnerActionPending(false); }
+  }
   async function search(event: React.FormEvent) {
     event.preventDefault();
     setSearching(true);
@@ -189,6 +214,8 @@ export default function RoomPage() {
     );
   const nominating = snapshot.state === "NOMINATING";
   const revealed = snapshot.state === "NOMINATIONS_LOCKED";
+  const champion = snapshot.tournament?.champion;
+  const winnerActionUrl = champion?.localAvailability?.plexUrl ?? champion?.availability?.link ?? window.location.href;
   return (
     <main className="shell stack">
       <BrandLogo label="Movie night" />
@@ -677,6 +704,7 @@ export default function RoomPage() {
           {snapshot.state === "WINNER" && snapshot.tournament.champion ? (
             <div className="winner-controller">
               <p>🏆 Tonight&apos;s winner</p>
+              {snapshot.tournament.champion.posterUrl && <img className="winner-poster" src={snapshot.tournament.champion.posterUrl} alt="" />}
               <h1>{snapshot.tournament.champion.title}</h1>
               <p>
                 {snapshot.tournament.champion.mediaType} ·{" "}
@@ -686,6 +714,21 @@ export default function RoomPage() {
               {snapshot.tournament.champion.redemption && (
                 <p className="notice">Returned through redemption</p>
               )}
+              <div className="winner-actions">
+                <div className="qr-frame"><QRCodeSVG value={winnerActionUrl} size={142} fgColor="#06194d" bgColor="#fffdf0" /></div>
+                <div className="stack">
+                  {snapshot.tournament.champion.localAvailability?.plexUrl && <a className="button-link" href={snapshot.tournament.champion.localAvailability.plexUrl} target="_blank" rel="noreferrer">Open in Plex</a>}
+                  {!snapshot.tournament.champion.localAvailability?.plexUrl && snapshot.tournament.champion.availability?.link && <a className="button-link" href={snapshot.tournament.champion.availability.link} target="_blank" rel="noreferrer">View streaming options</a>}
+                  {snapshot.tournament.champion.requestAvailability?.requestable && host && <>
+                    {snapshot.tournament.champion.mediaType === "TV" && <label>TV season request<select value={tvSeasonPolicy} onChange={(event)=>setTvSeasonPolicy(event.target.value as typeof tvSeasonPolicy)}><option value="FIRST">Season 1</option><option value="LATEST">Latest season</option><option value="ALL">All seasons</option></select></label>}
+                    <button disabled={winnerActionPending} onClick={()=>void requestWinner()}>{winnerActionPending ? "Requesting…" : "Request in Seerr"}</button>
+                  </>}
+                  {host && <button className="secondary" disabled={winnerActionPending} onClick={()=>void replay()}>Run It Back</button>}
+                  {winnerActionMessage && <p className="notice" role="status">{winnerActionMessage}</p>}
+                </div>
+              </div>
+              <div className="winner-path"><h2>Winner Journey</h2>{snapshot.tournament.bracket.filter((result)=>result.winnerId===snapshot.tournament!.champion!.id).map((result)=><span className="provider-badge" key={result.key}>Defeated {result.loserTitle}</span>)}</div>
+              {snapshot.tournament.tasteSnapshot && <div className="taste-snapshot"><h2>Group Taste Snapshot</h2><p>{snapshot.tournament.tasteSnapshot.dominantGenres.join(" · ") || "Anything goes"}</p>{snapshot.tournament.tasteSnapshot.consensusPercent !== null && <p>{snapshot.tournament.tasteSnapshot.consensusPercent}% final-round consensus</p>}{snapshot.tournament.tasteSnapshot.closestMatchup && <p>Closest call: {snapshot.tournament.tasteSnapshot.closestMatchup.winnerTitle} by {snapshot.tournament.tasteSnapshot.closestMatchup.margin}</p>}{snapshot.tournament.tasteSnapshot.surpriseWildcard && <p>Surprise wildcard: {snapshot.tournament.tasteSnapshot.surpriseWildcard}</p>}</div>}
             </div>
           ) : (
             snapshot.tournament.activeMatchup && (

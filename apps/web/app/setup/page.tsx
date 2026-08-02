@@ -10,6 +10,8 @@ type Setup = {
   region: string;
   timeZone: string;
   defaultRules: HouseRules;
+  historyEnabled: boolean;
+  recentExclusionDays: number;
   completed: boolean;
 };
 type ProviderStatus = {
@@ -48,6 +50,7 @@ export default function SetupPage() {
   );
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [historyMessage, setHistoryMessage] = useState("");
   useEffect(() => {
     void (async () => {
       const session = await api<{ authenticated: boolean }>(
@@ -92,6 +95,13 @@ export default function SetupPage() {
       );
       setSaving(false);
     }
+  }
+  async function clearHistory() {
+    if (!window.confirm("Clear all Watch Bracket household history and taste summaries?")) return;
+    try {
+      const result = await api<{ recordsRemoved: number }>("/api/admin/history", { method: "DELETE" });
+      setHistoryMessage(`Cleared ${result.recordsRemoved} history record${result.recordsRemoved === 1 ? "" : "s"}.`);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not clear history"); }
   }
   if (!setup)
     return (
@@ -270,6 +280,20 @@ export default function SetupPage() {
                 <option value="HYBRID">Watch now or requestable</option>
               </select>
             </label>
+          </div>
+          <div className="card stack history-settings">
+            <label>
+              <input type="checkbox" checked={setup.historyEnabled} onChange={(event)=>setSetup({...setup,historyEnabled:event.target.checked})} />
+              Use Watch Bracket history to reduce repeats
+            </label>
+            <label>
+              Exclude recent candidates for
+              <select value={setup.recentExclusionDays} disabled={!setup.historyEnabled} onChange={(event)=>setSetup({...setup,recentExclusionDays:Number(event.target.value)})}>
+                <option value="0">Never</option><option value="7">7 days</option><option value="30">30 days</option><option value="90">90 days</option><option value="365">1 year</option>
+              </select>
+            </label>
+            <button className="danger" type="button" onClick={()=>void clearHistory()}>Clear household history</button>
+            {historyMessage && <p className="notice" role="status">{historyMessage}</p>}
           </div>
         </section>
       )}

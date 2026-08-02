@@ -57,6 +57,13 @@
       "when": 1785698831145,
       "tag": "0007_pink_spyke",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785702051182,
+      "tag": "0008_mean_whizzer",
+      "breakpoints": true
     }
   ]
 }

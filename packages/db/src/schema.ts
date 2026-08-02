@@ -34,6 +34,8 @@ export const households = pgTable('households', {
   region: text('region').notNull().default('CA'),
   timeZone: text('time_zone').notNull().default('America/Toronto'),
   defaultRules: jsonb('default_rules_json').notNull().default({ preset: 'MOVIE_NIGHT', nominationDurationSeconds: 120, nominationSlots: 2, revealMode: 'AFTER_DEADLINE' }),
+  historyEnabled: boolean('history_enabled').notNull().default(true),
+  recentExclusionDays: integer('recent_exclusion_days').notNull().default(30),
   onboardingCompletedAt: timestamp('onboarding_completed_at', { withTimezone: true }),
   ...timestamps
 });
@@ -56,6 +58,7 @@ export const rooms = pgTable('rooms', {
   state: roomState('state').notNull().default('LOBBY'),
   rules: jsonb('rules_json').notNull().default({ preset: 'MOVIE_NIGHT', nominationDurationSeconds: 120, nominationSlots: 2, revealMode: 'AFTER_DEADLINE' }),
   randomSeed: text('random_seed').notNull().default('watch-bracket'),
+  replayOfRoomId: uuid('replay_of_room_id').references((): AnyPgColumn => rooms.id, { onDelete: 'set null' }),
   hostParticipantId: uuid('host_participant_id').references((): AnyPgColumn => participants.id),
   lockedAt: timestamp('locked_at', { withTimezone: true }),
   nominationDeadline: timestamp('nomination_deadline', { withTimezone: true }),
@@ -64,6 +67,16 @@ export const rooms = pgTable('rooms', {
   version: bigint('version', { mode: 'number' }).notNull().default(0),
   ...timestamps
 }, (table) => [uniqueIndex('rooms_code_uq').on(table.code), index('rooms_expiration_idx').on(table.state, table.expiresAt), index('rooms_nomination_deadline_idx').on(table.state, table.nominationDeadline)]);
+
+export const watchBracketHistory = pgTable('watch_bracket_history', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  householdId: uuid('household_id').notNull().references(() => households.id, { onDelete: 'cascade' }),
+  roomId: uuid('room_id').notNull().references(() => rooms.id, { onDelete: 'cascade' }),
+  winnerMediaItemId: uuid('winner_media_item_id').notNull().references(() => mediaItems.id, { onDelete: 'cascade' }),
+  candidateMediaItemIds: jsonb('candidate_media_item_ids_json').notNull().default([]),
+  tasteSnapshot: jsonb('taste_snapshot_json').notNull().default({}),
+  completedAt: timestamp('completed_at', { withTimezone: true }).notNull().defaultNow()
+}, (table) => [uniqueIndex('watch_bracket_history_room_uq').on(table.roomId), index('watch_bracket_history_household_date_idx').on(table.householdId, table.completedAt)]);
 
 export const participants = pgTable('participants', {
   id: uuid('id').primaryKey().defaultRandom(),

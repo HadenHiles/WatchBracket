@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { createDatabase, adminUsers, castLaunchTokens, displayPairingCodes, matchups, participants, rooms } from '@watch-bracket/db';
+import { createDatabase, adminUsers, castLaunchTokens, displayPairingCodes, matchups, participants, rooms, watchBracketHistory } from '@watch-bracket/db';
 import { bootstrapAdmin } from './domain.js';
 import { buildApp } from './app.js';
 import { startExpirationScheduler } from './scheduler.js';
@@ -165,6 +165,13 @@ suite('Milestones 1 through 3 API against PostgreSQL', () => {
     const winnerSnapshot = (await app.inject({ method: 'GET', url: `/api/rooms/${created.roomId}/snapshot`, headers: { cookie: hostRoomCookies } })).json();
     expect(winnerSnapshot).toMatchObject({ state: 'WINNER', tournament: { completedMatchups: 9, status: 'COMPLETED' } });
     expect(winnerSnapshot.tournament.champion).toBeTruthy();
+    expect(winnerSnapshot.tournament.tasteSnapshot).toMatchObject({ dominantGenres: expect.any(Array) });
+    expect(await inspector.db.select().from(watchBracketHistory).where(eq(watchBracketHistory.roomId, created.roomId))).toHaveLength(1);
+    const replayRoom = await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/run-it-back`, headers: hostHeaders, payload: {} });
+    expect(replayRoom.statusCode).toBe(200); expect(replayRoom.json()).toMatchObject({ participantCount: 3 });
+    const replayParticipant = cookieValue(replayRoom, 'wb_participant');
+    const replaySnapshot = await app.inject({ method: 'GET', url: `/api/rooms/${replayRoom.json().roomId}/snapshot`, headers: { cookie: `wb_participant=${replayParticipant}` } });
+    expect(replaySnapshot.json()).toMatchObject({ state: 'LOBBY', viewer: 'HOST', participants: expect.arrayContaining([expect.objectContaining({ nickname: 'Maya' })]) });
     expect((await inspector.db.select().from(matchups).where(eq(matchups.roomId, created.roomId)))).toHaveLength(9);
     expect((await app.inject({ method: 'DELETE', url: `/api/displays/${castSession.displaySessionId}`, headers: hostHeaders })).json()).toMatchObject({ revoked: true });
 
@@ -179,5 +186,5 @@ suite('Milestones 1 through 3 API against PostgreSQL', () => {
     const stop = startExpirationScheduler(inspector.db, () => undefined, 10);
     await new Promise((resolve) => setTimeout(resolve, 80)); stop();
     expect((await inspector.db.select().from(rooms).where(eq(rooms.id, created.roomId)))[0]!.state).toBe('EXPIRED');
-  });
+  }, 20_000);
 });

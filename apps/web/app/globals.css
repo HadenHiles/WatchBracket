@@ -99,6 +99,11 @@ dl { display: grid; grid-template-columns: auto 1fr; gap: .5rem 1rem; } dt { col
 .versus article:last-child { text-align: right; }
 .vote.selected, button.selected { outline: 3px solid #fbbf24; }
 .winner-controller { text-align: center; padding: 2rem 0; } .winner-controller h1 { font-size: clamp(3rem,12vw,6rem); margin: .2em 0; }
+.winner-poster { width: min(220px, 52vw); aspect-ratio: 2/3; object-fit: cover; border: 4px solid #ffd637; box-shadow: 9px 9px 0 #ef3e46; }
+.winner-actions { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 1.25rem; margin: 1.5rem auto; }
+.button-link { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; padding: .75rem 1rem; border-radius: 4px; color: #06194d; background: #ffd637; font-weight: 900; text-decoration: none; box-shadow: 4px 4px 0 #ef3e46; }
+.winner-path, .taste-snapshot { margin: 1.5rem auto 0; max-width: 46rem; padding: 1rem; border: 2px solid #4e79c8; background: #06194dcc; }
+.winner-path { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; } .winner-path h2 { flex-basis: 100%; }
 .bracket-list { display: grid; gap: .65rem; padding-left: 1.5rem; } .bracket-list li { padding: .6rem; }
 .invite-card { align-content: start; justify-items: center; padding: 1rem; text-align: center; }
 .invite-card h2 { margin-bottom: 0; }

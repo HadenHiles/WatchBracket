@@ -1,28 +1,398 @@
-import { useEffect, useRef, useState } from 'react';
-import { createRoot } from 'react-dom/client';
-import { io, type Socket } from 'socket.io-client';
-import { z } from 'zod';
-import { CAST_NAMESPACE, CastLaunchEnvelopeSchema, DisplayEnvelopeSchema, type DisplayScene, type LobbyScene } from '@watch-bracket/display-protocol';
-import { RoomDisplay } from '@watch-bracket/display-ui';
-import { RoomSnapshotSchema, ServerEnvelopeSchema } from '@watch-bracket/realtime-protocol';
-import './style.css';
+import { useEffect, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { io, type Socket } from "socket.io-client";
+import { z } from "zod";
+import {
+  CAST_NAMESPACE,
+  CastLaunchEnvelopeSchema,
+  DisplayEnvelopeSchema,
+  type DisplayScene,
+  type LobbyScene,
+} from "@watch-bracket/display-protocol";
+import { RoomDisplay } from "@watch-bracket/display-ui";
+import {
+  RoomSnapshotSchema,
+  ServerEnvelopeSchema,
+} from "@watch-bracket/realtime-protocol";
+import "./style.css";
 
-type ReceiverContext={addCustomMessageListener(namespace:string,handler:(message:{data:unknown})=>void):void;start(options:unknown):void;stop():void;setApplicationState(value:string):void};
-type ReceiverSdk={framework:{CastReceiverContext:{getInstance():ReceiverContext};system:{MessageType:{JSON:unknown}}}};
-declare global{interface Window{cast?:ReceiverSdk}}
-type ReceiverState='BOOTING'|'WAITING_FOR_LAUNCH_TOKEN'|'EXCHANGING_TOKEN'|'CONNECTING'|'CONNECTED'|'RECONNECTING'|'ROOM_COMPLETE'|'SESSION_REVOKED'|'FATAL_ERROR';
-const ExchangeSchema=z.object({displaySessionId:z.uuid(),roomId:z.uuid(),displayToken:z.string().min(32),expiresAt:z.iso.datetime(),protocolVersion:z.literal(1)});
-const fixture:LobbyScene={type:'LOBBY',roomName:'Receiver Test Night',roomCode:'7K9MQR',joinUrl:'https://bracket.famflix.live/join/7K9MQR',locked:false,participants:[{nickname:'Haden',role:'HOST',connected:true},{nickname:'Maya',role:'PARTICIPANT',connected:true},{nickname:'Alex',role:'PARTICIPANT',connected:true}]};
-function toScene(value:unknown):DisplayScene{const snapshot=RoomSnapshotSchema.parse(value);if(snapshot.state==='LOBBY'||snapshot.state==='EXPIRED')return{type:'LOBBY',roomName:snapshot.name,roomCode:snapshot.code,joinUrl:`${window.location.origin}/join/${snapshot.code}`,locked:snapshot.locked,participants:snapshot.participants.map(({nickname,role,connected})=>({nickname,role,connected}))};if(snapshot.state==='NOMINATING'||snapshot.state==='NOMINATIONS_LOCKED')return{type:'NOMINATION_PROGRESS',roomName:snapshot.name,roomCode:snapshot.code,deadline:snapshot.nominationDeadline,submittedParticipants:snapshot.nominationProgress.submittedParticipants,lockedParticipants:snapshot.nominationProgress.lockedParticipants,totalParticipants:snapshot.nominationProgress.totalParticipants,revealed:snapshot.nominationsRevealed,candidates:snapshot.candidates.map(({title,mediaType,releaseYear,supportCount})=>({title,mediaType,releaseYear,supportCount}))};const tournament=snapshot.tournament;if(!tournament)throw new Error('Tournament unavailable');const matchup=tournament.activeMatchup;const candidate=(item:NonNullable<typeof matchup>['candidateA'])=>({id:item.id,title:item.title,mediaType:item.mediaType,releaseYear:item.releaseYear,runtimeMinutes:item.runtimeMinutes,contentRating:item.contentRating,genres:item.genres,...(item.posterUrl!==undefined?{posterUrl:item.posterUrl}:{}),...(item.availability?{availability:item.availability}:{}),seed:item.seed,strikes:item.strikes,redemption:item.redemption});if(snapshot.state==='WINNER'&&tournament.champion)return{type:'WINNER',roomName:snapshot.name,winner:candidate(tournament.champion),path:tournament.bracket.filter((result)=>result.winnerId===tournament.champion!.id).map((result)=>({stage:result.stage,opponentTitle:result.loserTitle}))};if(!matchup)throw new Error('Matchup unavailable');const base={roomName:snapshot.name,stage:matchup.stage,matchupNumber:matchup.sequence,totalMatchups:tournament.totalMatchups,candidateA:candidate(matchup.candidateA),candidateB:candidate(matchup.candidateB)};if(matchup.status==='INTRO')return{type:'MATCHUP_INTRO',...base,deadline:matchup.deadline};if(matchup.status==='VOTING')return{type:'MATCHUP_VOTING',...base,deadline:matchup.deadline!,votesReceived:matchup.votesReceived,eligibleVoters:matchup.eligibleVoters};const result=matchup.resolution!;const winner=result.winnerId===matchup.candidateA.id?matchup.candidateA:matchup.candidateB;const loser=result.loserId===matchup.candidateA.id?matchup.candidateA:matchup.candidateB;const winnerIsA=winner.id===matchup.candidateA.id;return{type:'MATCHUP_RESULT',roomName:snapshot.name,stage:matchup.stage,matchupNumber:matchup.sequence,totalMatchups:tournament.totalMatchups,winner:candidate(winner),loser:candidate(loser),votesWinner:winnerIsA?result.votesA:result.votesB,votesLoser:winnerIsA?result.votesB:result.votesA,abstentions:result.abstentions,tieBreak:result.tieBreak,deadline:matchup.deadline};}
-
-function Receiver(){const testMode=new URLSearchParams(window.location.search).get('test')==='1';const[state,setState]=useState<ReceiverState>('BOOTING');const[scene,setScene]=useState<DisplayScene|undefined>(testMode?fixture:undefined);const[detail,setDetail]=useState('Starting the receiver…');const socketRef=useRef<Socket|undefined>(undefined);const sequence=useRef(0);
-  useEffect(()=>{if(testMode){setState(new URLSearchParams(window.location.search).get('reconnecting')==='1'?'RECONNECTING':'CONNECTED');setDetail('Deterministic receiver presentation test mode');return;}const sdk=window.cast;if(!sdk){setState('FATAL_ERROR');setDetail('The Google Cast Receiver SDK is unavailable.');return;}const context=sdk.framework.CastReceiverContext.getInstance();let attached=false;let stopped=false;let lifecycleTimer=window.setTimeout(()=>{if(!attached){setState('FATAL_ERROR');setDetail('No launch token arrived. Start casting again from the host phone.');context.stop();}},60_000);
-    const stopLater=(delay:number)=>{window.clearTimeout(lifecycleTimer);lifecycleTimer=window.setTimeout(()=>{stopped=true;socketRef.current?.disconnect();context.stop();},delay);};
-    const connect=(displaySessionId:string,roomId:string,displayToken:string)=>{setState('CONNECTING');setDetail('Connecting directly to the game…');const socket=io({path:'/socket.io',transports:['websocket'],auth:{displayToken},reconnection:true,reconnectionDelay:500,reconnectionDelayMax:10_000,randomizationFactor:.5});socketRef.current=socket;socket.on('connect',()=>{setState('CONNECTED');setDetail('Connected');context.setApplicationState('Watch Bracket connected');socket.emit('display:subscribe',{roomId,displaySessionId});});socket.on('display:snapshot',(input:unknown)=>{const envelope=ServerEnvelopeSchema.safeParse(input);if(!envelope.success)return;const snapshot=RoomSnapshotSchema.safeParse(envelope.data.payload);if(!snapshot.success)return;sequence.current=snapshot.data.sequence;setScene(toScene(snapshot.data));if(snapshot.data.state==='EXPIRED'||snapshot.data.state==='WINNER'){setState('ROOM_COMPLETE');stopLater(5*60_000);}});socket.on('display:scene',(input:unknown)=>{const envelope=DisplayEnvelopeSchema.safeParse(input);if(!envelope.success)return;if(sequence.current&&envelope.data.sequence>sequence.current+1){socket.emit('display:subscribe',{roomId,displaySessionId});return;}if(envelope.data.sequence>=sequence.current){sequence.current=envelope.data.sequence;setScene(envelope.data.scene);if(envelope.data.scene.type==='WINNER'){setState('ROOM_COMPLETE');stopLater(5*60_000);}}});socket.on('display:revoked',()=>{setState('SESSION_REVOKED');setDetail('This TV was disconnected by the host.');socket.disconnect();stopLater(8_000);});socket.on('disconnect',(reason)=>{if(!stopped&&reason!=='io client disconnect'){setState('RECONNECTING');setDetail('Reconnecting to Watch Bracket…');}});socket.on('connect_error',()=>{setState('RECONNECTING');setDetail('Reconnecting to Watch Bracket…');});};
-    context.addCustomMessageListener(CAST_NAMESPACE,(message)=>{void(async()=>{const launch=CastLaunchEnvelopeSchema.safeParse(message.data);if(!launch.success){setState('FATAL_ERROR');setDetail('This sender uses an unsupported launch message.');return;}setState('EXCHANGING_TOKEN');setDetail('Securing this TV session…');try{const response=await fetch('/api/displays/cast/exchange',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({launchToken:launch.data.launchToken,protocolVersion:launch.data.schemaVersion})});const body=await response.json();if(!response.ok)throw new Error(typeof body.message==='string'?body.message:'Cast session exchange failed.');const exchange=ExchangeSchema.parse(body);attached=true;window.clearTimeout(lifecycleTimer);connect(exchange.displaySessionId,exchange.roomId,exchange.displayToken);}catch(error){setState('FATAL_ERROR');setDetail(error instanceof Error?error.message:'Could not attach this TV.');stopLater(15_000);}})();});
-    context.start({customNamespaces:{[CAST_NAMESPACE]:sdk.framework.system.MessageType.JSON},disableIdleTimeout:true,skipPlayersLoad:true,statusText:'Ready for Watch Bracket',versionCode:1});setState('WAITING_FOR_LAUNCH_TOKEN');setDetail('Waiting for the host phone…');
-    return()=>{stopped=true;window.clearTimeout(lifecycleTimer);socketRef.current?.disconnect();};},[testMode]);
-  if(scene)return <><RoomDisplay scene={scene} connection={state==='RECONNECTING'?'reconnecting':state==='SESSION_REVOKED'?'revoked':'connected'} logoSrc="/cast/receiver/brand/watch-bracket-wordmark.png"/><div className="receiver-state">{state.replaceAll('_',' ').toLowerCase()}</div></>;
-  return <main className="shell"><div className="receiver-logo-frame"><img className="receiver-logo" src="/cast/receiver/brand/watch-bracket-wordmark.png" alt="Watch Bracket"/></div><h1>{state==='WAITING_FOR_LAUNCH_TOKEN'?'Ready for Cast setup':state.replaceAll('_',' ')}</h1><small>{detail}</small></main>;
+type ReceiverContext = {
+  addCustomMessageListener(
+    namespace: string,
+    handler: (message: { data: unknown }) => void,
+  ): void;
+  start(options: unknown): void;
+  stop(): void;
+  setApplicationState(value: string): void;
+};
+type ReceiverSdk = {
+  framework: {
+    CastReceiverContext: { getInstance(): ReceiverContext };
+    system: { MessageType: { JSON: unknown } };
+  };
+};
+declare global {
+  interface Window {
+    cast?: ReceiverSdk;
+  }
 }
-createRoot(document.getElementById('root')!).render(<Receiver/>);
+type ReceiverState =
+  | "BOOTING"
+  | "WAITING_FOR_LAUNCH_TOKEN"
+  | "EXCHANGING_TOKEN"
+  | "CONNECTING"
+  | "CONNECTED"
+  | "RECONNECTING"
+  | "ROOM_COMPLETE"
+  | "SESSION_REVOKED"
+  | "FATAL_ERROR";
+const ExchangeSchema = z.object({
+  displaySessionId: z.uuid(),
+  roomId: z.uuid(),
+  displayToken: z.string().min(32),
+  expiresAt: z.iso.datetime(),
+  protocolVersion: z.literal(1),
+});
+const fixture: LobbyScene = {
+  type: "LOBBY",
+  roomName: "Receiver Test Night",
+  roomCode: "7K9MQR",
+  joinUrl: "https://bracket.famflix.live/join/7K9MQR",
+  locked: false,
+  participants: [
+    { nickname: "Haden", role: "HOST", connected: true },
+    { nickname: "Maya", role: "PARTICIPANT", connected: true },
+    { nickname: "Alex", role: "PARTICIPANT", connected: true },
+  ],
+};
+function toScene(value: unknown): DisplayScene {
+  const snapshot = RoomSnapshotSchema.parse(value);
+  if (snapshot.state === "LOBBY" || snapshot.state === "EXPIRED")
+    return {
+      type: "LOBBY",
+      roomName: snapshot.name,
+      roomCode: snapshot.code,
+      joinUrl: `${window.location.origin}/join/${snapshot.code}`,
+      locked: snapshot.locked,
+      participants: snapshot.participants.map(
+        ({ nickname, role, connected }) => ({ nickname, role, connected }),
+      ),
+    };
+  if (
+    snapshot.state === "NOMINATING" ||
+    snapshot.state === "NOMINATIONS_LOCKED"
+  )
+    return {
+      type: "NOMINATION_PROGRESS",
+      roomName: snapshot.name,
+      roomCode: snapshot.code,
+      deadline: snapshot.nominationDeadline,
+      submittedParticipants: snapshot.nominationProgress.submittedParticipants,
+      lockedParticipants: snapshot.nominationProgress.lockedParticipants,
+      totalParticipants: snapshot.nominationProgress.totalParticipants,
+      revealed: snapshot.nominationsRevealed,
+      candidates: snapshot.candidates.map(
+        ({ title, mediaType, releaseYear, supportCount }) => ({
+          title,
+          mediaType,
+          releaseYear,
+          supportCount,
+        }),
+      ),
+    };
+  const tournament = snapshot.tournament;
+  if (!tournament) throw new Error("Tournament unavailable");
+  const matchup = tournament.activeMatchup;
+  const candidate = (item: NonNullable<typeof matchup>["candidateA"]) => ({
+    id: item.id,
+    title: item.title,
+    mediaType: item.mediaType,
+    releaseYear: item.releaseYear,
+    runtimeMinutes: item.runtimeMinutes,
+    contentRating: item.contentRating,
+    genres: item.genres,
+    ...(item.posterUrl !== undefined ? { posterUrl: item.posterUrl } : {}),
+    ...(item.availability ? { availability: item.availability } : {}),
+    ...(item.localAvailability ? { localAvailability: item.localAvailability } : {}),
+    ...(item.requestAvailability ? { requestAvailability: item.requestAvailability } : {}),
+    seed: item.seed,
+    strikes: item.strikes,
+    redemption: item.redemption,
+  });
+  if (snapshot.state === "WINNER" && tournament.champion)
+    return {
+      type: "WINNER",
+      roomName: snapshot.name,
+      winner: candidate(tournament.champion),
+      path: tournament.bracket
+        .filter((result) => result.winnerId === tournament.champion!.id)
+        .map((result) => ({
+          stage: result.stage,
+          opponentTitle: result.loserTitle,
+        })),
+      actionUrl: tournament.champion.localAvailability?.plexUrl ?? tournament.champion.availability?.link ?? `https://www.themoviedb.org/${tournament.champion.mediaType === "MOVIE" ? "movie" : "tv"}/${tournament.champion.catalogKey.split(":").at(-1)}`,
+      actionLabel: tournament.champion.localAvailability?.plexUrl ? "Open in Plex" : tournament.champion.availability?.link ? "View streaming options" : "View title details",
+      tasteSnapshot: tournament.tasteSnapshot,
+    };
+  if (!matchup) throw new Error("Matchup unavailable");
+  const base = {
+    roomName: snapshot.name,
+    stage: matchup.stage,
+    matchupNumber: matchup.sequence,
+    totalMatchups: tournament.totalMatchups,
+    candidateA: candidate(matchup.candidateA),
+    candidateB: candidate(matchup.candidateB),
+  };
+  if (matchup.status === "INTRO")
+    return { type: "MATCHUP_INTRO", ...base, deadline: matchup.deadline };
+  if (matchup.status === "VOTING")
+    return {
+      type: "MATCHUP_VOTING",
+      ...base,
+      deadline: matchup.deadline!,
+      votesReceived: matchup.votesReceived,
+      eligibleVoters: matchup.eligibleVoters,
+    };
+  const result = matchup.resolution!;
+  const winner =
+    result.winnerId === matchup.candidateA.id
+      ? matchup.candidateA
+      : matchup.candidateB;
+  const loser =
+    result.loserId === matchup.candidateA.id
+      ? matchup.candidateA
+      : matchup.candidateB;
+  const winnerIsA = winner.id === matchup.candidateA.id;
+  return {
+    type: "MATCHUP_RESULT",
+    roomName: snapshot.name,
+    stage: matchup.stage,
+    matchupNumber: matchup.sequence,
+    totalMatchups: tournament.totalMatchups,
+    winner: candidate(winner),
+    loser: candidate(loser),
+    votesWinner: winnerIsA ? result.votesA : result.votesB,
+    votesLoser: winnerIsA ? result.votesB : result.votesA,
+    abstentions: result.abstentions,
+    tieBreak: result.tieBreak,
+    deadline: matchup.deadline,
+  };
+}
+
+function Receiver() {
+  const testMode =
+    new URLSearchParams(window.location.search).get("test") === "1";
+  const [state, setState] = useState<ReceiverState>("BOOTING");
+  const [scene, setScene] = useState<DisplayScene | undefined>(
+    testMode ? fixture : undefined,
+  );
+  const [detail, setDetail] = useState("Starting the receiver…");
+  const socketRef = useRef<Socket | undefined>(undefined);
+  const sequence = useRef(0);
+  useEffect(() => {
+    if (testMode) {
+      setState(
+        new URLSearchParams(window.location.search).get("reconnecting") === "1"
+          ? "RECONNECTING"
+          : "CONNECTED",
+      );
+      setDetail("Deterministic receiver presentation test mode");
+      return;
+    }
+    const sdk = window.cast;
+    if (!sdk) {
+      setState("FATAL_ERROR");
+      setDetail("The Google Cast Receiver SDK is unavailable.");
+      return;
+    }
+    const context = sdk.framework.CastReceiverContext.getInstance();
+    let attached = false;
+    let stopped = false;
+    let lifecycleTimer = window.setTimeout(() => {
+      if (!attached) {
+        setState("FATAL_ERROR");
+        setDetail(
+          "No launch token arrived. Start casting again from the host phone.",
+        );
+        context.stop();
+      }
+    }, 60_000);
+    const stopLater = (delay: number) => {
+      window.clearTimeout(lifecycleTimer);
+      lifecycleTimer = window.setTimeout(() => {
+        stopped = true;
+        socketRef.current?.disconnect();
+        context.stop();
+      }, delay);
+    };
+    const connect = (
+      displaySessionId: string,
+      roomId: string,
+      displayToken: string,
+    ) => {
+      setState("CONNECTING");
+      setDetail("Connecting directly to the game…");
+      const socket = io({
+        path: "/socket.io",
+        transports: ["websocket"],
+        auth: { displayToken },
+        reconnection: true,
+        reconnectionDelay: 500,
+        reconnectionDelayMax: 10_000,
+        randomizationFactor: 0.5,
+      });
+      socketRef.current = socket;
+      socket.on("connect", () => {
+        setState("CONNECTED");
+        setDetail("Connected");
+        context.setApplicationState("Watch Bracket connected");
+        socket.emit("display:subscribe", { roomId, displaySessionId });
+      });
+      socket.on("display:snapshot", (input: unknown) => {
+        const envelope = ServerEnvelopeSchema.safeParse(input);
+        if (!envelope.success) return;
+        const snapshot = RoomSnapshotSchema.safeParse(envelope.data.payload);
+        if (!snapshot.success) return;
+        sequence.current = snapshot.data.sequence;
+        setScene(toScene(snapshot.data));
+        if (
+          snapshot.data.state === "EXPIRED" ||
+          snapshot.data.state === "WINNER"
+        ) {
+          setState("ROOM_COMPLETE");
+          stopLater(5 * 60_000);
+        }
+      });
+      socket.on("display:scene", (input: unknown) => {
+        const envelope = DisplayEnvelopeSchema.safeParse(input);
+        if (!envelope.success) return;
+        if (sequence.current && envelope.data.sequence > sequence.current + 1) {
+          socket.emit("display:subscribe", { roomId, displaySessionId });
+          return;
+        }
+        if (envelope.data.sequence >= sequence.current) {
+          sequence.current = envelope.data.sequence;
+          setScene(envelope.data.scene);
+          if (envelope.data.scene.type === "WINNER") {
+            setState("ROOM_COMPLETE");
+            stopLater(5 * 60_000);
+          }
+        }
+      });
+      socket.on("display:revoked", () => {
+        setState("SESSION_REVOKED");
+        setDetail("This TV was disconnected by the host.");
+        socket.disconnect();
+        stopLater(8_000);
+      });
+      socket.on("disconnect", (reason) => {
+        if (!stopped && reason !== "io client disconnect") {
+          setState("RECONNECTING");
+          setDetail("Reconnecting to Watch Bracket…");
+        }
+      });
+      socket.on("connect_error", () => {
+        setState("RECONNECTING");
+        setDetail("Reconnecting to Watch Bracket…");
+      });
+    };
+    context.addCustomMessageListener(CAST_NAMESPACE, (message) => {
+      void (async () => {
+        const launch = CastLaunchEnvelopeSchema.safeParse(message.data);
+        if (!launch.success) {
+          setState("FATAL_ERROR");
+          setDetail("This sender uses an unsupported launch message.");
+          return;
+        }
+        setState("EXCHANGING_TOKEN");
+        setDetail("Securing this TV session…");
+        try {
+          const response = await fetch("/api/displays/cast/exchange", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              launchToken: launch.data.launchToken,
+              protocolVersion: launch.data.schemaVersion,
+            }),
+          });
+          const body = await response.json();
+          if (!response.ok)
+            throw new Error(
+              typeof body.message === "string"
+                ? body.message
+                : "Cast session exchange failed.",
+            );
+          const exchange = ExchangeSchema.parse(body);
+          attached = true;
+          window.clearTimeout(lifecycleTimer);
+          connect(
+            exchange.displaySessionId,
+            exchange.roomId,
+            exchange.displayToken,
+          );
+        } catch (error) {
+          setState("FATAL_ERROR");
+          setDetail(
+            error instanceof Error
+              ? error.message
+              : "Could not attach this TV.",
+          );
+          stopLater(15_000);
+        }
+      })();
+    });
+    context.start({
+      customNamespaces: {
+        [CAST_NAMESPACE]: sdk.framework.system.MessageType.JSON,
+      },
+      disableIdleTimeout: true,
+      skipPlayersLoad: true,
+      statusText: "Ready for Watch Bracket",
+      versionCode: 1,
+    });
+    setState("WAITING_FOR_LAUNCH_TOKEN");
+    setDetail("Waiting for the host phone…");
+    return () => {
+      stopped = true;
+      window.clearTimeout(lifecycleTimer);
+      socketRef.current?.disconnect();
+    };
+  }, [testMode]);
+  if (scene)
+    return (
+      <>
+        <RoomDisplay
+          scene={scene}
+          connection={
+            state === "RECONNECTING"
+              ? "reconnecting"
+              : state === "SESSION_REVOKED"
+                ? "revoked"
+                : "connected"
+          }
+          logoSrc="/cast/receiver/brand/watch-bracket-wordmark.png"
+        />
+        <div className="receiver-state">
+          {state.replaceAll("_", " ").toLowerCase()}
+        </div>
+      </>
+    );
+  return (
+    <main className="shell">
+      <div className="receiver-logo-frame">
+        <img
+          className="receiver-logo"
+          src="/cast/receiver/brand/watch-bracket-wordmark.png"
+          alt="Watch Bracket"
+        />
+      </div>
+      <h1>
+        {state === "WAITING_FOR_LAUNCH_TOKEN"
+          ? "Ready for Cast setup"
+          : state.replaceAll("_", " ")}
+      </h1>
+      <small>{detail}</small>
+    </main>
+  );
+}
+createRoot(document.getElementById("root")!).render(<Receiver />);

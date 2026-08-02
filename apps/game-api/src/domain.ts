@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Algorithm, hash as hashPassword, verify as verifyPassword } from '@node-rs/argon2';
-import { and, eq, gt, isNull, sql } from 'drizzle-orm';
+import { and, eq, gt, isNull, ne, sql } from 'drizzle-orm';
 import type { Database } from '@watch-bracket/db';
 import { adminSessions, adminUsers, auditEvents, castLaunchTokens, displayPairingCodes, displaySessions, households, idempotencyKeys, participants, rooms } from '@watch-bracket/db';
 import { generatePairingCode, generateRoomCode, generateSessionToken, hashToken, isPairingCodeExpired, normalizeNickname } from '@watch-bracket/shared';
@@ -169,7 +169,7 @@ export async function exchangeCastLaunchToken(ctx: DomainContext, body: { launch
     const [issuerSession] = await tx.select({ id: adminSessions.id }).from(adminSessions)
       .where(and(eq(adminSessions.id, launch.issuedToHostSessionId), isNull(adminSessions.revokedAt), gt(adminSessions.expiresAt, new Date()))).limit(1);
     if (!issuerSession) throw new DomainError('CAST_LAUNCH_TOKEN_INVALID', 'The Cast launch token is invalid.', 401);
-    const [room] = await tx.select().from(rooms).where(and(eq(rooms.id, launch.roomId), eq(rooms.state, 'LOBBY'))).limit(1);
+    const [room] = await tx.select().from(rooms).where(and(eq(rooms.id, launch.roomId), ne(rooms.state, 'EXPIRED'))).limit(1);
     if (!room?.hostParticipantId) throw new DomainError('ROOM_UNAVAILABLE', 'That room is unavailable.', 404);
     const existing = await tx.select({ id: displaySessions.id }).from(displaySessions).where(and(eq(displaySessions.roomId, room.id), eq(displaySessions.kind, 'CAST'), isNull(displaySessions.revokedAt), gt(displaySessions.expiresAt, new Date())));
     if (existing.length) await tx.update(displaySessions).set({ revokedAt: new Date() }).where(and(eq(displaySessions.roomId, room.id), eq(displaySessions.kind, 'CAST'), isNull(displaySessions.revokedAt)));
@@ -192,7 +192,7 @@ export async function pairDisplay(ctx: DomainContext, body: { pairingCode: strin
     if (pairing.consumedAt) return { error: new DomainError('PAIRING_CODE_USED', 'The pairing code has already been used.', 409) };
     if (isPairingCodeExpired(pairing.expiresAt)) return { error: new DomainError('PAIRING_CODE_EXPIRED', 'The pairing code has expired.', 410) };
     if (pairing.attemptCount >= 5) return { error: new DomainError('PAIRING_CODE_ATTEMPTS_EXCEEDED', 'Too many pairing attempts.', 429) };
-    const [room] = await tx.select().from(rooms).where(and(eq(rooms.id, pairing.roomId), eq(rooms.state, 'LOBBY'))).limit(1);
+    const [room] = await tx.select().from(rooms).where(and(eq(rooms.id, pairing.roomId), ne(rooms.state, 'EXPIRED'))).limit(1);
     if (!room?.hostParticipantId) return { error: new DomainError('ROOM_UNAVAILABLE', 'That room is unavailable.', 404) };
     const token = generateSessionToken();
     const expiresAt = new Date(Math.min(room.expiresAt.getTime(), Date.now() + 24 * 3_600_000));

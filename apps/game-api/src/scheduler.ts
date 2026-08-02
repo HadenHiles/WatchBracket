@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import type { Database } from '@watch-bracket/db';
 
-export function startExpirationScheduler(db: Database, onTransition: (roomId: string) => void, intervalMs = 1_000) {
+export function startExpirationScheduler(db: Database, onTransition: (roomId: string) => void | Promise<void>, intervalMs = 1_000) {
   let running = false;
   const poll = async () => {
     if (running) return;
@@ -16,6 +16,14 @@ export function startExpirationScheduler(db: Database, onTransition: (roomId: st
         FROM due WHERE rooms.id = due.id AND rooms.state = 'NOMINATING'
         RETURNING rooms.id
       `);
+      const tournamentDue = await db.execute<{ id: string }>(sql`
+        SELECT DISTINCT rooms.id FROM rooms
+        INNER JOIN matchups ON matchups.room_id = rooms.id AND matchups.advanced_at IS NULL
+        WHERE (rooms.state = 'MATCHUP_INTRO' AND matchups.status = 'INTRO' AND matchups.intro_ends_at <= now())
+           OR (rooms.state = 'VOTING' AND matchups.status = 'VOTING' AND matchups.voting_ends_at <= now())
+           OR (rooms.state = 'MATCHUP_RESULT' AND matchups.status = 'RESOLVED' AND matchups.result_ends_at <= now())
+        LIMIT 25
+      `);
       const expired = await db.execute<{ id: string }>(sql`
         WITH due AS (
           SELECT id FROM rooms WHERE state <> 'EXPIRED' AND expires_at <= now()
@@ -25,7 +33,8 @@ export function startExpirationScheduler(db: Database, onTransition: (roomId: st
         FROM due WHERE rooms.id = due.id AND rooms.state <> 'EXPIRED'
         RETURNING rooms.id
       `);
-      for (const row of [...nominations, ...expired]) onTransition(row.id);
+      for (const row of tournamentDue) await onTransition(row.id);
+      for (const row of [...nominations, ...expired]) await onTransition(row.id);
     } finally { running = false; }
   };
   void poll();

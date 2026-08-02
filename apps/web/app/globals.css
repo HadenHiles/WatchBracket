@@ -45,5 +45,13 @@ dl { display: grid; grid-template-columns: auto 1fr; gap: .5rem 1rem; } dt { col
 .catalog-item { display: grid; gap: .8rem; padding: 1rem; border-radius: 14px; background: #ffffff0b; border: 1px solid #ffffff16; }
 .catalog-item p { color: var(--muted); margin-bottom: 0; }
 .candidate { display: flex; justify-content: space-between; gap: 1rem; padding: 1rem; border-radius: 14px; background: #ffffff0b; }
+.spread { justify-content: space-between; align-items: center; }
+.controller-timer { font-size: 2.5rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+.versus { display: grid; grid-template-columns: 1fr auto 1fr; gap: .75rem; align-items: center; }
+.versus article { min-height: 150px; padding: 1rem; border: 1px solid #ffffff20; border-radius: 16px; background: #ffffff0b; }
+.versus article:last-child { text-align: right; }
+.vote.selected, button.selected { outline: 3px solid #fbbf24; }
+.winner-controller { text-align: center; padding: 2rem 0; } .winner-controller h1 { font-size: clamp(3rem,12vw,6rem); margin: .2em 0; }
+.bracket-list { display: grid; gap: .65rem; padding-left: 1.5rem; } .bracket-list li { padding: .6rem; }
 @media (min-width: 680px) { .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }

@@ -1,0 +1,16 @@
+import { describe, expect, it } from 'vitest';
+import { advanceTournament, createTournament, resolveBallots, seedCandidates, totalMatchups, type TournamentFormat } from './index.js';
+
+const candidates=(size:number)=>Array.from({length:size},(_,index)=>({id:`candidate-${index+1}`,score:(size-index)/size,supportCount:1+(index%3),firstChoiceCount:index%2,nominatorIds:[`person-${index%5}`]}));
+
+describe('Double-Take tournament engine',()=>{
+  for(const format of [8,12,16] as TournamentFormat[])it(`completes the ${format}-title path deterministically`,()=>{let state=createTournament(candidates(format),format,'room-seed');const seen=new Set<string>();while(!state.championId){const pendingIds=state.pending.flatMap((matchup)=>[matchup.candidateAId,matchup.candidateBId]);expect(new Set(pendingIds).size).toBe(pendingIds.length);expect(pendingIds.every((id)=>(state.strikes[id]??0)<2)).toBe(true);const matchup=state.pending[0]!;expect(matchup.candidateAId).not.toBe(matchup.candidateBId);expect(seen.has(matchup.key)).toBe(false);seen.add(matchup.key);state=advanceTournament(state,{winnerId:matchup.candidateAId,loserId:matchup.candidateBId,votesA:3,votesB:1,abstentions:0,tieBreak:null});state=JSON.parse(JSON.stringify(state));}expect(state.completed).toHaveLength(totalMatchups(format));expect(state.championId).toBeTruthy();expect(state.pending).toEqual([]);});
+
+  it('reproduces opening seeds and matchups for many stored room seeds',()=>{for(const format of [8,12,16] as TournamentFormat[])for(let index=0;index<32;index++){const input=candidates(format);const first=createTournament(input,format,`seed-${index}`);const second=createTournament([...input].reverse(),format,`seed-${index}`);expect(seedCandidates(input,`seed-${index}`)).toEqual(seedCandidates([...input].reverse(),`seed-${index}`));expect(first.pending).toEqual(second.pending);}});
+
+  it('updates vote totals, supports abstention, and follows the deterministic tie ladder',()=>{const seeded=seedCandidates(candidates(8),'tie-seed');const result=resolveBallots({candidateA:seeded[0]!,candidateB:seeded[1]!,roomSeed:'tie-seed',matchupKey:'qualifier-1',ballots:[{participantId:'1',candidateId:seeded[0]!.id,abstained:false},{participantId:'2',candidateId:seeded[1]!.id,abstained:false},{participantId:'3',candidateId:null,abstained:true}]});expect(result.abstentions).toBe(1);expect(result.votesA).toBe(1);expect(result.votesB).toBe(1);expect(result.tieBreak).not.toBeNull();});
+
+  it('uses a reproducible room-seeded coin flip when all metadata is tied',()=>{const [candidateA,candidateB]=seedCandidates([{id:'a',score:1,supportCount:1,firstChoiceCount:1,nominatorIds:['1']},{id:'b',score:1,supportCount:1,firstChoiceCount:1,nominatorIds:['2']}],'coin');const input={candidateA:candidateA!,candidateB:candidateB!,roomSeed:'coin',matchupKey:'final',ballots:[]};expect(resolveBallots(input)).toEqual(resolveBallots(input));expect(resolveBallots(input).tieBreak).toBe('SEEDED_COIN_FLIP');});
+
+  it('rejects duplicate candidate identities and mismatched results',()=>{expect(()=>createTournament([...candidates(7),candidates(7)[0]!],8,'seed')).toThrow(/unique/);const state=createTournament(candidates(8),8,'seed');expect(()=>advanceTournament(state,{winnerId:'missing',loserId:state.pending[0]!.candidateBId,votesA:0,votesB:0,abstentions:0,tieBreak:null})).toThrow(/pending matchup/);});
+});

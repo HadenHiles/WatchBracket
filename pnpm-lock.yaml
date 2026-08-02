@@ -117,6 +117,9 @@ importers:
       '@watch-bracket/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@watch-bracket/tournament-engine':
+        specifier: workspace:*
+        version: link:../../packages/tournament-engine
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(postgres@3.4.9)
@@ -328,6 +331,18 @@ importers:
       typescript:
         specifier: 6.0.2
         version: 6.0.2
+
+  packages/tournament-engine:
+    devDependencies:
+      '@types/node':
+        specifier: 24.3.0
+        version: 24.3.0
+      typescript:
+        specifier: 6.0.2
+        version: 6.0.2
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@24.3.0)(vite@6.4.3(@types/node@24.3.0)(tsx@4.23.4)(yaml@2.9.0))
 
 packages:
 

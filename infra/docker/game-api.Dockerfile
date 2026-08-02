@@ -9,6 +9,7 @@ COPY packages/display-protocol/package.json packages/display-protocol/package.js
 COPY packages/mock-catalog/package.json packages/mock-catalog/package.json
 COPY packages/realtime-protocol/package.json packages/realtime-protocol/package.json
 COPY packages/shared/package.json packages/shared/package.json
+COPY packages/tournament-engine/package.json packages/tournament-engine/package.json
 RUN pnpm install --frozen-lockfile
 COPY apps/game-api apps/game-api
 COPY packages packages

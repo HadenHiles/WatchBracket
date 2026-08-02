@@ -4,6 +4,7 @@ import { displaySessions, mediaItems, participants, rooms, submissions } from '@
 import type { DisplayScene } from '@watch-bracket/display-protocol';
 import { HouseRulesSchema, type CatalogItem, type RoomSnapshot } from '@watch-bracket/realtime-protocol';
 import { DomainError } from './domain.js';
+import { getTournamentData } from './tournament.js';
 
 export type Presence = { participantIds: Set<string>; displayIds: Set<string> };
 
@@ -18,6 +19,7 @@ export async function getSnapshot(db: Database, roomId: string, viewer: RoomSnap
   const byParticipant = new Map<string, typeof selected>();
   for (const item of selected) byParticipant.set(item.participantId, [...(byParticipant.get(item.participantId) ?? []), item]);
   const revealed = room.state === 'NOMINATIONS_LOCKED' || Boolean(room.nominationsRevealedAt);
+  const tournament = await getTournamentData(db, roomId, viewer === 'DISPLAY' ? undefined : viewerParticipantId);
   const candidateMap = new Map<string, CatalogItem & { supportCount: number; bestRank: number }>();
   if (revealed) for (const item of selected) {
     const current = candidateMap.get(item.catalogKey);
@@ -31,11 +33,17 @@ export async function getSnapshot(db: Database, roomId: string, viewer: RoomSnap
     rules: HouseRulesSchema.parse(room.rules), nominationDeadline: room.nominationDeadline?.toISOString() ?? null, nominationsRevealed: revealed,
     nominationProgress: { submittedParticipants: [...byParticipant.values()].filter((items) => new Set(items.map((item) => item.rank)).size === 2).length, lockedParticipants: people.filter((person) => person.ready).length, totalParticipants: people.length },
     ownSubmissions: viewerParticipantId ? (byParticipant.get(viewerParticipantId) ?? []).map((item) => ({ ...asCatalogItem(item), rank: item.rank })).sort((a, b) => a.rank - b.rank) : [],
-    candidates: [...candidateMap.values()].map((item) => ({ ...item, bestRank: item.bestRank })).sort((a, b) => b.supportCount - a.supportCount || a.bestRank - b.bestRank || a.title.localeCompare(b.title))
+    candidates: [...candidateMap.values()].map((item) => ({ ...item, bestRank: item.bestRank })).sort((a, b) => b.supportCount - a.supportCount || a.bestRank - b.bestRank || a.title.localeCompare(b.title)), tournament
   };
 }
 
 export function toDisplayScene(snapshot: RoomSnapshot, publicAppUrl: string): DisplayScene {
   if (snapshot.state === 'LOBBY' || snapshot.state === 'EXPIRED') return { type: 'LOBBY', roomName: snapshot.name, roomCode: snapshot.code, joinUrl: `${publicAppUrl}/join/${snapshot.code}`, locked: snapshot.locked, participants: snapshot.participants.map(({ nickname, role, connected }) => ({ nickname, role, connected })) };
-  return { type: 'NOMINATION_PROGRESS', roomName: snapshot.name, roomCode: snapshot.code, deadline: snapshot.nominationDeadline, submittedParticipants: snapshot.nominationProgress.submittedParticipants, lockedParticipants: snapshot.nominationProgress.lockedParticipants, totalParticipants: snapshot.nominationProgress.totalParticipants, revealed: snapshot.nominationsRevealed, candidates: snapshot.candidates.map(({ title, mediaType, releaseYear, supportCount }) => ({ title, mediaType, releaseYear, supportCount })) };
+  if (snapshot.state === 'NOMINATING' || snapshot.state === 'NOMINATIONS_LOCKED') return { type: 'NOMINATION_PROGRESS', roomName: snapshot.name, roomCode: snapshot.code, deadline: snapshot.nominationDeadline, submittedParticipants: snapshot.nominationProgress.submittedParticipants, lockedParticipants: snapshot.nominationProgress.lockedParticipants, totalParticipants: snapshot.nominationProgress.totalParticipants, revealed: snapshot.nominationsRevealed, candidates: snapshot.candidates.map(({ title, mediaType, releaseYear, supportCount }) => ({ title, mediaType, releaseYear, supportCount })) };
+  const tournament=snapshot.tournament;if(!tournament)throw new DomainError('TOURNAMENT_STATE_INVALID','Tournament presentation is unavailable.',500);const matchup=tournament.activeMatchup;const sceneCandidate=(item:NonNullable<typeof matchup>['candidateA'])=>({id:item.id,title:item.title,mediaType:item.mediaType,releaseYear:item.releaseYear,runtimeMinutes:item.runtimeMinutes,contentRating:item.contentRating,genres:item.genres,seed:item.seed,strikes:item.strikes,redemption:item.redemption});
+  if(snapshot.state==='WINNER'&&tournament.champion){const champion=tournament.champion;return{type:'WINNER',roomName:snapshot.name,winner:sceneCandidate(champion),path:tournament.bracket.filter((result)=>result.winnerId===champion.id).map((result)=>({stage:result.stage,opponentTitle:result.loserTitle}))};}
+  if(!matchup)throw new DomainError('MATCHUP_MISSING','The active matchup is unavailable.',500);const base={roomName:snapshot.name,stage:matchup.stage,matchupNumber:matchup.sequence,totalMatchups:tournament.totalMatchups,candidateA:sceneCandidate(matchup.candidateA),candidateB:sceneCandidate(matchup.candidateB)};
+  if(matchup.status==='INTRO')return{type:'MATCHUP_INTRO',...base,deadline:matchup.deadline};
+  if(matchup.status==='VOTING')return{type:'MATCHUP_VOTING',...base,deadline:matchup.deadline!,votesReceived:matchup.votesReceived,eligibleVoters:matchup.eligibleVoters};
+  const resolution=matchup.resolution;if(!resolution)throw new DomainError('MATCHUP_RESULT_MISSING','The matchup result is unavailable.',500);const winner=resolution.winnerId===matchup.candidateA.id?matchup.candidateA:matchup.candidateB;const loser=resolution.loserId===matchup.candidateA.id?matchup.candidateA:matchup.candidateB;const winnerIsA=winner.id===matchup.candidateA.id;return{type:'MATCHUP_RESULT',roomName:snapshot.name,stage:matchup.stage,matchupNumber:matchup.sequence,totalMatchups:tournament.totalMatchups,winner:sceneCandidate(winner),loser:sceneCandidate(loser),votesWinner:winnerIsA?resolution.votesA:resolution.votesB,votesLoser:winnerIsA?resolution.votesB:resolution.votesA,abstentions:resolution.abstentions,tieBreak:resolution.tieBreak,deadline:matchup.deadline};
 }

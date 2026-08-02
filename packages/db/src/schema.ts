@@ -2,11 +2,17 @@ import { sql } from 'drizzle-orm';
 import { bigint, boolean, check, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
 
 export const adminRole = pgEnum('admin_role', ['ADMIN']);
-export const roomState = pgEnum('room_state', ['LOBBY', 'NOMINATING', 'NOMINATIONS_LOCKED', 'EXPIRED']);
+export const roomState = pgEnum('room_state', ['LOBBY', 'NOMINATING', 'NOMINATIONS_LOCKED', 'MATCHUP_INTRO', 'VOTING', 'MATCHUP_RESULT', 'WINNER', 'EXPIRED']);
 export const participantRole = pgEnum('participant_role', ['HOST', 'PARTICIPANT', 'CO_HOST', 'SPECTATOR']);
 export const displayKind = pgEnum('display_kind', ['BROWSER', 'CAST']);
 export const actorType = pgEnum('actor_type', ['ADMIN', 'PARTICIPANT', 'DISPLAY', 'SYSTEM']);
 export const mediaType = pgEnum('media_type', ['MOVIE', 'TV']);
+export const candidateSource = pgEnum('candidate_source', ['DIRECT', 'MOCK_WILDCARD']);
+export const candidateStatus = pgEnum('candidate_status', ['ACTIVE', 'ELIMINATED', 'WINNER']);
+export const tournamentStatus = pgEnum('tournament_status', ['ACTIVE', 'COMPLETED']);
+export const roundStage = pgEnum('round_stage', ['QUALIFIER', 'SPOTLIGHT', 'REDEMPTION', 'REDEMPTION_FINAL', 'CHAMPIONSHIP_PLAY_IN', 'CHAMPIONSHIP_SEMI', 'CHAMPIONSHIP_FINAL']);
+export const roundStatus = pgEnum('round_status', ['ACTIVE', 'COMPLETED']);
+export const matchupStatus = pgEnum('matchup_status', ['INTRO', 'VOTING', 'RESOLVED']);
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -142,6 +148,82 @@ export const submissions = pgTable('submissions', {
   index('submissions_room_idx').on(table.roomId),
   check('submissions_rank_check', sql`${table.rank} between 1 and 2`)
 ]);
+
+export const candidates = pgTable('candidates', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  roomId: uuid('room_id').notNull().references(() => rooms.id, { onDelete: 'cascade' }),
+  mediaItemId: uuid('media_item_id').notNull().references(() => mediaItems.id),
+  sourceType: candidateSource('source_type').notNull(),
+  scoreTotal: integer('score_total').notNull().default(0),
+  supportCount: integer('support_count').notNull().default(0),
+  firstChoiceCount: integer('first_choice_count').notNull().default(0),
+  nominatorIds: jsonb('nominator_ids_json').notNull().default([]),
+  reasonCodes: jsonb('reason_codes_json').notNull().default([]),
+  seed: integer('seed').notNull(),
+  strikes: integer('strikes').notNull().default(0),
+  status: candidateStatus('status').notNull().default('ACTIVE'),
+  redemption: boolean('redemption').notNull().default(false),
+  ...timestamps
+}, (table) => [uniqueIndex('candidates_room_media_uq').on(table.roomId, table.mediaItemId), uniqueIndex('candidates_room_seed_uq').on(table.roomId, table.seed), index('candidates_room_status_idx').on(table.roomId, table.status)]);
+
+export const tournaments = pgTable('tournaments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  roomId: uuid('room_id').notNull().references(() => rooms.id, { onDelete: 'cascade' }),
+  format: integer('format').notNull(),
+  voteDurationSeconds: integer('vote_duration_seconds').notNull(),
+  engineState: jsonb('engine_state_json').notNull(),
+  status: tournamentStatus('status').notNull().default('ACTIVE'),
+  championCandidateId: uuid('champion_candidate_id').references(() => candidates.id),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  ...timestamps
+}, (table) => [uniqueIndex('tournaments_room_uq').on(table.roomId), check('tournaments_format_check', sql`${table.format} in (8, 12, 16)`), check('tournaments_vote_duration_check', sql`${table.voteDurationSeconds} between 10 and 120`)]);
+
+export const rounds = pgTable('rounds', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tournamentId: uuid('tournament_id').notNull().references(() => tournaments.id, { onDelete: 'cascade' }),
+  roomId: uuid('room_id').notNull().references(() => rooms.id, { onDelete: 'cascade' }),
+  stage: roundStage('stage').notNull(),
+  sequence: integer('sequence').notNull(),
+  status: roundStatus('status').notNull().default('ACTIVE'),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, (table) => [uniqueIndex('rounds_tournament_stage_uq').on(table.tournamentId, table.stage), uniqueIndex('rounds_tournament_sequence_uq').on(table.tournamentId, table.sequence)]);
+
+export const matchups = pgTable('matchups', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tournamentId: uuid('tournament_id').notNull().references(() => tournaments.id, { onDelete: 'cascade' }),
+  roomId: uuid('room_id').notNull().references(() => rooms.id, { onDelete: 'cascade' }),
+  roundId: uuid('round_id').notNull().references(() => rounds.id, { onDelete: 'cascade' }),
+  engineKey: text('engine_key').notNull(),
+  sequence: integer('sequence').notNull(),
+  stage: roundStage('stage').notNull(),
+  candidateAId: uuid('candidate_a_id').notNull().references(() => candidates.id),
+  candidateBId: uuid('candidate_b_id').notNull().references(() => candidates.id),
+  winnerCandidateId: uuid('winner_candidate_id').references(() => candidates.id),
+  loserCandidateId: uuid('loser_candidate_id').references(() => candidates.id),
+  status: matchupStatus('status').notNull().default('INTRO'),
+  eligibleParticipantIds: jsonb('eligible_participant_ids_json').notNull().default([]),
+  introEndsAt: timestamp('intro_ends_at', { withTimezone: true }).notNull(),
+  votingStartsAt: timestamp('voting_starts_at', { withTimezone: true }),
+  votingEndsAt: timestamp('voting_ends_at', { withTimezone: true }),
+  resultEndsAt: timestamp('result_ends_at', { withTimezone: true }),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  advancedAt: timestamp('advanced_at', { withTimezone: true }),
+  resolution: jsonb('resolution_json').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, (table) => [uniqueIndex('matchups_tournament_engine_key_uq').on(table.tournamentId, table.engineKey), uniqueIndex('matchups_tournament_sequence_uq').on(table.tournamentId, table.sequence), index('matchups_due_idx').on(table.status, table.introEndsAt, table.votingEndsAt, table.resultEndsAt)]);
+
+export const votes = pgTable('votes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  matchupId: uuid('matchup_id').notNull().references(() => matchups.id, { onDelete: 'cascade' }),
+  participantId: uuid('participant_id').notNull().references(() => participants.id, { onDelete: 'cascade' }),
+  candidateId: uuid('candidate_id').references(() => candidates.id),
+  abstained: boolean('abstained').notNull().default(false),
+  submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+}, (table) => [uniqueIndex('votes_matchup_participant_uq').on(table.matchupId, table.participantId), index('votes_matchup_idx').on(table.matchupId), check('votes_choice_check', sql`(${table.abstained} and ${table.candidateId} is null) or (not ${table.abstained} and ${table.candidateId} is not null)`)]);
 
 export const idempotencyKeys = pgTable('idempotency_keys', {
   id: uuid('id').primaryKey().defaultRandom(),

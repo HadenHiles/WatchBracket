@@ -25,6 +25,8 @@ The integration boundary has no generic proxy or user-controlled URL operation. 
 
 The first-run wizard persists only non-secret household defaults. Its integration readiness call crosses the authenticated internal boundary and returns configured booleans, never credential values. Provider secrets remain in the integration-service environment or mounted secret files and are redacted from service logs.
 
+Tournament votes are room- and matchup-scoped. A unique database constraint permits one current vote per participant, updates replace the prior choice, explicit abstention cannot contain a candidate, and the server rejects votes after its stored deadline. Controller snapshots expose only the viewer's vote; displays receive completion counts before resolution and aggregate totals afterward.
+
 The example Caddy configuration applies HSTS, nosniff, referrer, and permissions headers. The receiver gets a narrow CSP. Do not weaken it to admit arbitrary scripts, images, or connection destinations.
 
 For a future public release, security reports will be accepted through a private advisory channel documented in `SECURITY.md`; the private deployment currently has no public reporting address.

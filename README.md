@@ -1,8 +1,8 @@
 # Watch Bracket
 
-Watch Bracket is a self-hosted, real-time party game for turning “what should we watch?” into a shared decision. This repository currently implements Milestones 0 through 3: NAS-oriented deployment, first-run household setup, durable rooms, browser and Chromecast displays, a deterministic local catalog, private ranked nominations, server-owned timers, and merged nomination reveals.
+Watch Bracket is a self-hosted, real-time party game for turning “what should we watch?” into a shared decision. This repository currently implements Milestones 0 through 4: NAS-oriented deployment, first-run household setup, durable rooms, browser and Chromecast displays, private ranked nominations, and the complete server-authoritative Double-Take tournament.
 
-External media search, recommendations, voting, tournament logic, and live provider operations are deliberately deferred. The Milestone 3 mock catalog requires no API keys. Google Cast launching requires a registered Custom Web Receiver application ID and a registered physical test device; see `docs/cast/MILESTONE-2.md`.
+External media search, recommendations, and live provider operations are deliberately deferred. The local catalog and tournament require no API keys. Google Cast launching requires a registered Custom Web Receiver application ID and a registered physical test device; see `docs/cast/MILESTONE-2.md`.
 
 ## Local prerequisites
 
@@ -50,6 +50,7 @@ Integration tests require a real, migrated PostgreSQL database and fail clearly 
 - `apps/game-api`: Fastify, Socket.IO, authoritative room state, and expiration scheduler
 - `apps/integration-service`: private Fastify boundary with explicit unimplemented provider operations
 - `packages/mock-catalog`: deterministic provider-free catalog used by nomination tests and local play
+- `packages/tournament-engine`: pure deterministic 8-, 12-, and 16-title Double-Take rules
 - `apps/cast-receiver`: Vite-built Custom Web Receiver and deterministic receiver test mode
 - `packages/db`: Drizzle schema and migration; PostgreSQL is durable truth
 - `packages/realtime-protocol` and `packages/display-protocol`: versioned Zod contracts

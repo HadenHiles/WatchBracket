@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { createDatabase, adminUsers, castLaunchTokens, displayPairingCodes, participants, rooms } from '@watch-bracket/db';
+import { createDatabase, adminUsers, castLaunchTokens, displayPairingCodes, matchups, participants, rooms } from '@watch-bracket/db';
 import { bootstrapAdmin } from './domain.js';
 import { buildApp } from './app.js';
 import { startExpirationScheduler } from './scheduler.js';
 import type { GameApiEnv } from './env.js';
+import { processTournamentTransition } from './tournament.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const suite = databaseUrl ? describe : describe.skip;
@@ -30,7 +31,7 @@ suite('Milestones 1 through 3 API against PostgreSQL', () => {
   const cookieHeader = (cookies: Record<string,string>) => Object.entries(cookies).map(([name,value]) => `${name}=${value}`).join('; ');
 
   beforeAll(async () => {
-    await inspector.client.unsafe('TRUNCATE TABLE audit_events, idempotency_keys, cast_launch_tokens, display_sessions, display_pairing_codes, submissions, media_items, participants, rooms, admin_sessions, admin_users, households RESTART IDENTITY CASCADE');
+    await inspector.client.unsafe('TRUNCATE TABLE audit_events, idempotency_keys, cast_launch_tokens, display_sessions, display_pairing_codes, votes, matchups, rounds, tournaments, candidates, submissions, media_items, participants, rooms, admin_sessions, admin_users, households RESTART IDENTITY CASCADE');
     app = await buildApp(env); await app.ready();
   });
   afterAll(async () => { await app?.close(); await inspector.client.end(); });
@@ -138,6 +139,29 @@ suite('Milestones 1 through 3 API against PostgreSQL', () => {
     expect(revealed.json().candidates).toEqual(expect.arrayContaining([expect.objectContaining({ catalogKey: firstTitle.catalogKey, supportCount: 2 }), expect.objectContaining({ catalogKey: secondTitle.catalogKey, supportCount: 2 })]));
     const restoredInProgress = await app.inject({ method: 'POST', url: '/api/rooms/join', headers: { ...origin, cookie: `wb_participant=${guestParticipant}` }, payload: { roomCode: created.code, nickname: 'Maya' } });
     expect(restoredInProgress.json()).toMatchObject({ restored: true });
+
+    const tournamentStart = await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/tournament/start`, headers: hostHeaders, payload: { format: 8, voteDurationSeconds: 10 } });
+    expect(tournamentStart.statusCode).toBe(200); expect(tournamentStart.json()).toMatchObject({ format: 8, totalMatchups: 9 });
+    for (let matchupNumber = 1; matchupNumber <= 9; matchupNumber++) {
+      let tournamentSnapshot = (await app.inject({ method: 'GET', url: `/api/rooms/${created.roomId}/snapshot`, headers: { cookie: hostRoomCookies } })).json();
+      expect(tournamentSnapshot.state).toBe('MATCHUP_INTRO'); expect(tournamentSnapshot.tournament.activeMatchup.sequence).toBe(matchupNumber);
+      expect((await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/tournament/skip-presentation`, headers: hostHeaders, payload: {} })).statusCode).toBe(200);
+      tournamentSnapshot = (await app.inject({ method: 'GET', url: `/api/rooms/${created.roomId}/snapshot`, headers: { cookie: hostRoomCookies } })).json();
+      expect(tournamentSnapshot.state).toBe('VOTING'); const active = tournamentSnapshot.tournament.activeMatchup;
+      expect((await app.inject({ method: 'POST', url: `/api/matchups/${active.id}/vote`, headers: hostHeaders, payload: { candidateId: active.candidateA.id, abstain: false } })).statusCode).toBe(200);
+      expect((await app.inject({ method: 'POST', url: `/api/matchups/${active.id}/vote`, headers: hostHeaders, payload: { candidateId: active.candidateB.id, abstain: false } })).statusCode).toBe(200);
+      expect((await app.inject({ method: 'POST', url: `/api/matchups/${active.id}/vote`, headers: guestHeaders, payload: { abstain: true } })).statusCode).toBe(200);
+      await inspector.db.update(matchups).set({ votingEndsAt: new Date(0) }).where(eq(matchups.id, active.id));
+      expect((await processTournamentTransition({ db: inspector.db, env }, created.roomId)).changed).toBe(true);
+      expect((await processTournamentTransition({ db: inspector.db, env }, created.roomId)).changed).toBe(false);
+      const resultSnapshot = (await app.inject({ method: 'GET', url: `/api/displays/${castSession.displaySessionId}/snapshot`, headers: { authorization: `Bearer ${castSession.displayToken}` } })).json();
+      expect(resultSnapshot).toMatchObject({ state: 'MATCHUP_RESULT', tournament: { activeMatchup: { sequence: matchupNumber, votesReceived: 2 } } });
+      expect((await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/tournament/skip-presentation`, headers: hostHeaders, payload: {} })).statusCode).toBe(200);
+    }
+    const winnerSnapshot = (await app.inject({ method: 'GET', url: `/api/rooms/${created.roomId}/snapshot`, headers: { cookie: hostRoomCookies } })).json();
+    expect(winnerSnapshot).toMatchObject({ state: 'WINNER', tournament: { completedMatchups: 9, status: 'COMPLETED' } });
+    expect(winnerSnapshot.tournament.champion).toBeTruthy();
+    expect((await inspector.db.select().from(matchups).where(eq(matchups.roomId, created.roomId)))).toHaveLength(9);
     expect((await app.inject({ method: 'DELETE', url: `/api/displays/${castSession.displaySessionId}`, headers: hostHeaders })).json()).toMatchObject({ revoked: true });
 
     const revokedIssuerLaunch = await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/cast-launch-tokens`, headers: hostHeaders, payload: {} });

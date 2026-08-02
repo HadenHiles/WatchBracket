@@ -29,6 +29,13 @@
       "when": 1785688083566,
       "tag": "0003_tiny_human_cannonball",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785689650175,
+      "tag": "0004_motionless_talos",
+      "breakpoints": true
     }
   ]
 }

@@ -15,6 +15,7 @@
     "@watch-bracket/mock-catalog": "workspace:*",
     "@watch-bracket/realtime-protocol": "workspace:*",
     "@watch-bracket/shared": "workspace:*",
+    "@watch-bracket/tournament-engine": "workspace:*",
     "drizzle-orm": "0.45.2",
     "fastify": "5.11.0",
     "socket.io": "4.8.3",

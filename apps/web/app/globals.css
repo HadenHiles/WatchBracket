@@ -25,6 +25,12 @@ label { display: grid; gap: .45rem; color: var(--muted); font-weight: 650; }
 .home-header p { margin: 0; color: var(--accent); font-size: .72rem; font-weight: 900; letter-spacing: .16em; text-transform: uppercase; }
 .site-logo { position: relative; width: min(72vw, 360px); aspect-ratio: 2.7; filter: drop-shadow(5px 6px 0 #020a25aa); }
 .site-logo img { object-fit: cover; }
+.brand-lockup { min-height: 92px; display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+.app-logo { position: relative; display: block; width: min(68vw, 300px); aspect-ratio: 2.7; flex: 0 0 auto; filter: drop-shadow(5px 6px 0 #020a25aa); }
+.app-logo img { object-fit: cover; }
+.brand-context { color: var(--accent); font-size: .72rem; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; }
+.display-connecting { min-height: 100vh; display: grid; place-items: center; padding: 5vw; background: radial-gradient(circle at 18% 0, #174aa2, transparent 35%), linear-gradient(145deg, #06194d, #020a25 72%); color: var(--ink); text-align: center; }
+.display-connecting .brand-lockup { justify-content: center; }
 .home-hero { position: relative; isolation: isolate; min-height: clamp(440px, 58vw, 560px); margin: .5rem 0 1.5rem; padding: clamp(1.25rem, 5vw, 3.5rem); overflow: hidden; border: 2px solid #4e79c8; border-radius: 12px; background-image: linear-gradient(90deg, #020a25f5 0%, #03123dd6 43%, #03123d4a 100%), linear-gradient(0deg, #020a25e6 0%, transparent 55%), url('/brand/video-store-hero-banner.png'); background-position: center; background-size: cover; box-shadow: 10px 10px 0 #020a25, inset 0 0 0 4px #ffffff12; }
 .home-hero::after { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: repeating-linear-gradient(0deg, transparent 0 4px, #00103724 4px 6px); mix-blend-mode: screen; }
 .hero-copy { width: min(100%, 690px); }
@@ -86,5 +92,5 @@ dl { display: grid; grid-template-columns: auto 1fr; gap: .5rem 1rem; } dt { col
 .invite-card h2 { margin-bottom: 0; }
 .qr-frame { width: fit-content; padding: 8px; line-height: 0; background: #fffdf0; border: 4px solid var(--accent); border-radius: 5px; box-shadow: 5px 5px 0 var(--accent2); }
 @media (min-width: 680px) { .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; } .lobby-grid { grid-template-columns: minmax(0,1fr) auto; align-items: start; } .invite-card { width: 224px; justify-self: end; } .feature-reel { grid-template-columns: 1fr 1fr; } .feature-reel-heading { grid-column: 1 / -1; } }
-@media (max-width: 520px) { .home-header { min-height: 88px; justify-content: center; } .home-header p { display: none; } .home-hero { min-height: 450px; padding: 1rem; background-position: 58% center; } .feature-frame img { width: 92px; height: 62px; } }
+@media (max-width: 520px) { .home-header { min-height: 88px; justify-content: center; } .home-header p { display: none; } .home-hero { min-height: 450px; padding: 1rem; background-position: 58% center; } .feature-frame img { width: 92px; height: 62px; } .brand-lockup { justify-content: center; flex-wrap: wrap; gap: .25rem; text-align: center; } .brand-context { width: 100%; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }

@@ -12,14 +12,16 @@ export const HouseRulesSchema = z.object({
   releaseYearMin: z.number().int().min(1870).max(2200).nullable().optional(),
   releaseYearMax: z.number().int().min(1870).max(2200).nullable().optional(),
   excludedGenres: z.array(z.string().min(1)).max(20).optional(),
-  availabilityMode: z.enum(['ANY', 'WATCH_NOW']).optional(),
+  availabilityMode: z.enum(['ANY', 'WATCH_NOW', 'HYBRID']).optional(),
   enabledStreamingProviderIds: z.array(z.number().int().positive()).max(50).optional()
 });
 export type HouseRules = z.infer<typeof HouseRulesSchema>;
 export const AvailabilityOfferDtoSchema = z.object({ providerId: z.number().int().positive(), providerName: z.string(), logoUrl: z.url().nullable(), category: z.enum(['SUBSCRIPTION', 'FREE', 'ADS', 'RENT', 'BUY']) });
 export const CatalogItemSchema = z.object({
   catalogKey: z.string(), mediaType: z.enum(['MOVIE', 'TV']), title: z.string(), releaseYear: z.number().int(), runtimeMinutes: z.number().int(), contentRating: z.string(), genres: z.array(z.string()), synopsis: z.string(),
-  posterUrl: z.url().nullable().optional(), availability: z.object({ region: z.string().length(2), link: z.url().nullable(), attribution: z.literal('JustWatch'), offers: z.array(AvailabilityOfferDtoSchema) }).optional()
+  posterUrl: z.url().nullable().optional(), availability: z.object({ region: z.string().length(2), link: z.url().nullable(), attribution: z.literal('JustWatch'), offers: z.array(AvailabilityOfferDtoSchema) }).optional(),
+  localAvailability: z.object({ available: z.boolean(), plexUrl: z.url().nullable(), libraryTitle: z.string().nullable(), episodeCount: z.number().int().nonnegative().nullable() }).optional(),
+  requestAvailability: z.object({ status: z.enum(['UNKNOWN','PENDING','PROCESSING','PARTIAL','AVAILABLE','REQUESTABLE','UNAVAILABLE']), requestable: z.boolean() }).optional()
 });
 export type CatalogItem = z.infer<typeof CatalogItemSchema>;
 export const SubmissionDtoSchema = CatalogItemSchema.extend({ rank: z.number().int().min(1).max(2) });

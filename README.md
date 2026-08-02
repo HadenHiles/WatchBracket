@@ -48,7 +48,7 @@ Integration tests require a real, migrated PostgreSQL database and fail clearly 
 
 - `apps/web`: Next.js App Router mobile controller and browser display
 - `apps/game-api`: Fastify, Socket.IO, authoritative room state, and expiration scheduler
-- `apps/integration-service`: private Fastify boundary for narrow, typed provider operations; currently implements TMDB
+- `apps/integration-service`: private Fastify boundary for narrow, typed TMDB, Plex, Tautulli, and Seerr-compatible operations
 - `packages/mock-catalog`: deterministic provider-free catalog used by tests and development fallback only
 - `packages/tournament-engine`: pure deterministic 8-, 12-, and 16-title Double-Take rules
 - `apps/cast-receiver`: Vite-built Custom Web Receiver and deterministic receiver test mode

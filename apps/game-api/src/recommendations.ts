@@ -6,7 +6,7 @@ import { HouseRulesSchema } from '@watch-bracket/realtime-protocol';
 import type { DomainContext } from './domain.js';
 import { eligibilityFailures } from './eligibility.js';
 import { cacheTmdbItems } from './nominations.js';
-import { recommendFromTmdb } from './providers.js';
+import { enrichWithHouseholdProviders, recommendFromTmdb } from './providers.js';
 
 export type PreparedWildcard = {
   mediaItemId: string; catalogKey: string; scoreTotal: number; scoreComponents: Record<string, number>; reasonCodes: string[];
@@ -17,7 +17,7 @@ const stableTie = (seed: string, key: string) => parseInt(createHash('sha256').u
 
 function scoreCandidate(candidate: RecommendationCandidate, directGenres: Map<string, number>, roomSeed: string, referenceYear: number) {
   const item = candidate.item;
-  const watchNow = item.availability.offers.some((offer) => ['SUBSCRIPTION', 'FREE', 'ADS'].includes(offer.category));
+  const watchNow = item.localAvailability?.available === true || item.availability.offers.some((offer) => ['SUBSCRIPTION', 'FREE', 'ADS'].includes(offer.category));
   const paid = item.availability.offers.some((offer) => offer.category === 'RENT' || offer.category === 'BUY');
   const similarity = clamp(candidate.sourceKinds.includes('RECOMMENDATIONS') ? .9 : .72);
   const availableNow = watchNow ? 1 : paid ? .6 : .15;
@@ -29,11 +29,13 @@ function scoreCandidate(candidate: RecommendationCandidate, directGenres: Map<st
   const age = referenceYear - item.releaseYear;
   const eraFit = age <= 5 ? .9 : age <= 20 ? 1 : .75;
   const novelty = clamp(1 - Math.log10(item.voteCount + 1) / 6);
-  const scoreComponents = { similarity, availableNow, clusterSupport, ratingConfidence, diversity, runtimeFit, eraFit, novelty };
-  const weighted = similarity * .24 + availableNow * .18 + clusterSupport * .13 + ratingConfidence * .09 + diversity * .08 + runtimeFit * .06 + eraFit * .05 + novelty * .03;
+  const householdFit = clamp(1 - Math.log10((item.householdHistoryScore ?? 0) + 1) / 3);
+  const requestable = item.requestAvailability?.requestable ? 1 : 0;
+  const scoreComponents = { similarity, availableNow, clusterSupport, ratingConfidence, diversity, runtimeFit, eraFit, novelty, householdFit, requestable };
+  const weighted = similarity * .22 + availableNow * .18 + clusterSupport * .13 + ratingConfidence * .09 + diversity * .08 + runtimeFit * .06 + eraFit * .05 + novelty * .03 + householdFit * .06 + requestable * .02;
   const reasons = [
     candidate.relatedSeedKeys.length > 1 ? `Similar to ${candidate.relatedSeedKeys.length} group picks` : 'Similar to a group pick',
-    watchNow ? `Available to stream in ${item.availability.region}` : paid ? `Available to rent or buy in ${item.availability.region}` : `Metadata verified for ${item.availability.region}`,
+    item.localAvailability?.available ? `Available in Plex${item.localAvailability.libraryTitle ? ` · ${item.localAvailability.libraryTitle}` : ''}` : watchNow ? `Available to stream in ${item.availability.region}` : item.requestAvailability?.requestable ? 'Available to request from Seerr' : paid ? `Available to rent or buy in ${item.availability.region}` : `Metadata verified for ${item.availability.region}`,
     item.runtimeMinutes ? `Fits a typical movie-night runtime at ${item.runtimeMinutes} minutes` : undefined,
     diversity > .7 && primaryGenre !== 'Unknown' ? `Adds ${primaryGenre.toLowerCase()} variety` : undefined,
     candidate.sourceKinds.includes('RECOMMENDATIONS') ? 'Recommended by TMDB' : 'Similar title from TMDB'
@@ -52,7 +54,9 @@ export async function prepareTmdbWildcards(ctx: DomainContext, roomId: string, l
   const result = await recommendFromTmdb(ctx, { seeds, region: household?.region ?? 'CA', limit: Math.min(48, Math.max(limit * 3, 16)) });
   const directKeys = new Set(direct.map((item) => item.catalogKey));
   const rules=HouseRulesSchema.parse(room.rules);
-  const canonical = [...new Map(result.candidates.filter((candidate) => !directKeys.has(candidate.item.catalogKey) && eligibilityFailures(candidate.item,rules).length===0).map((candidate) => [candidate.item.catalogKey, candidate])).values()];
+  const enrichedItems = await enrichWithHouseholdProviders(ctx, result.candidates.map((candidate) => candidate.item));
+  const enrichedByKey = new Map(enrichedItems.map((item) => [item.catalogKey, item]));
+  const canonical = [...new Map(result.candidates.map((candidate) => ({ ...candidate, item: enrichedByKey.get(candidate.item.catalogKey) ?? candidate.item })).filter((candidate) => !directKeys.has(candidate.item.catalogKey) && eligibilityFailures(candidate.item,rules).length===0).map((candidate) => [candidate.item.catalogKey, candidate])).values()];
   await cacheTmdbItems(ctx, canonical.map((candidate) => candidate.item), result.cachedUntil, roomId);
   if (!canonical.length) return [];
   const rows = await ctx.db.select({ id: mediaItems.id, catalogKey: mediaItems.catalogKey }).from(mediaItems).where(inArray(mediaItems.catalogKey, canonical.map((candidate) => candidate.item.catalogKey)));

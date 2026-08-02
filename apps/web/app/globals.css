@@ -86,6 +86,8 @@ dl { display: grid; grid-template-columns: auto 1fr; gap: .5rem 1rem; } dt { col
 .provider-badge { padding: .28rem .5rem; border: 1px solid #4e79c8; border-radius: 4px; background: #082b72; color: #fffbea; font-size: .72rem; font-weight: 800; }
 .provider-badge.free, .provider-badge.ads { border-color: #42d392; background: #0c563f; }
 .provider-badge.rent, .provider-badge.buy { border-color: #ffd637; background: #5f4810; }
+.provider-badge.local { border-color: #7dd3fc; background: #075985; }
+.provider-badge.requestable { border-color: #f0abfc; background: #701a75; }
 .score-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: .6rem; }
 .score-grid > span { display: grid; gap: .2rem; padding: .65rem; border: 1px solid #4e79c8; border-radius: 5px; background: #082b72; }
 .score-grid small { color: var(--muted); text-transform: capitalize; }

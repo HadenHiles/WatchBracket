@@ -4,7 +4,7 @@ import rateLimit from '@fastify/rate-limit';
 import { eq, sql } from 'drizzle-orm';
 import Fastify, { type FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { createDatabase, participants, rooms } from '@watch-bracket/db';
+import { auditEvents, candidates, createDatabase, mediaItems, participants, rooms, tournaments } from '@watch-bracket/db';
 import { HouseRulesSchema } from '@watch-bracket/realtime-protocol';
 import { apiError, generateSessionToken, hashToken } from '@watch-bracket/shared';
 import { bootstrapAdmin, createCastLaunchToken, createDisplayPairingCode, createRoom, DomainError, exchangeCastLaunchToken, joinRoom, login, logout, pairDisplay, resolveAdmin, resolveDisplay, resolveParticipant, revokeDisplay, setRoomLock } from './domain.js';
@@ -17,6 +17,7 @@ import { closeNominations, extendNominations, searchCatalog, seedMockCatalog, se
 import { getHouseholdSetup, saveHouseholdSetup } from './setup.js';
 import { extendVoting, processTournamentTransition, skipPresentation, startTournament, submitVote } from './tournament.js';
 import { getRecommendationDebug } from './recommendations.js';
+import { requestFromSeerr } from './providers.js';
 
 const LoginSchema = z.object({ email: z.email(), password: z.string().min(1).max(256) });
 const CreateRoomSchema = z.object({ name: z.string().trim().min(1).max(80), hostNickname: z.string().min(1).max(64) });
@@ -30,6 +31,7 @@ const ExtendNominationsSchema = z.object({ seconds: z.number().int().min(30).max
 const SubmitNominationSchema = z.object({ catalogKey: z.string().min(1).max(128) });
 const StartTournamentSchema = z.object({ format: z.union([z.literal(8),z.literal(12),z.literal(16)]), voteDurationSeconds: z.number().int().min(10).max(120) });
 const VoteSchema = z.object({ candidateId: z.uuid().optional(), abstain: z.boolean().default(false) }).refine((value)=>value.abstain!==Boolean(value.candidateId),{message:'Choose a candidate or abstain.'});
+const WinnerRequestSchema = z.object({ confirm: z.literal(true), tvSeasonPolicy: z.enum(['FIRST','LATEST','ALL']).optional() });
 const ParamsRoomSchema = z.object({ roomId: z.uuid() });
 const ParamsDisplaySchema = z.object({ displaySessionId: z.uuid() });
 const ParamsSubmissionSchema = z.object({ roomId: z.uuid(), rank: z.coerce.number().int().min(1).max(2) });
@@ -224,6 +226,18 @@ export async function buildApp(env: GameApiEnv) {
   });
   app.post('/api/rooms/:roomId/tournament/skip-presentation', async (request) => {
     await mutationGuard(request);const{roomId}=parse(ParamsRoomSchema,request.params);const participant=await resolveParticipant(context,request.cookies[COOKIE.participant]);if(!participant)throw new DomainError('HOST_REQUIRED','Room host authorization is required.',403);await skipPresentation(context,participant.id,roomId);await realtime.broadcastRoom(roomId,'bracket:updated');return{skipped:true};
+  });
+  app.post('/api/rooms/:roomId/winner/request', { config: { rateLimit: { max: 3, timeWindow: '1 hour' } } }, async (request) => {
+    await mutationGuard(request); const { roomId } = parse(ParamsRoomSchema, request.params); const input = parse(WinnerRequestSchema, request.body);
+    const participant = await resolveParticipant(context, request.cookies[COOKIE.participant]);
+    if (!participant || participant.roomId !== roomId || participant.role !== 'HOST') throw new DomainError('HOST_REQUIRED', 'Only the room host can request the winning title.', 403);
+    const [winner] = await app.db.select({ householdId: rooms.householdId, state: rooms.state, mediaType: mediaItems.mediaType, tmdbId: mediaItems.tmdbId, title: mediaItems.title })
+      .from(rooms).innerJoin(tournaments, eq(tournaments.roomId, rooms.id)).innerJoin(candidates, eq(candidates.id, tournaments.championCandidateId)).innerJoin(mediaItems, eq(mediaItems.id, candidates.mediaItemId)).where(eq(rooms.id, roomId)).limit(1);
+    if (!winner || winner.state !== 'WINNER' || !winner.tmdbId) throw new DomainError('WINNER_NOT_REQUESTABLE', 'A canonical winning title is required before requesting media.', 409);
+    if (winner.mediaType === 'TV' && !input.tvSeasonPolicy) throw new DomainError('TV_SEASON_POLICY_REQUIRED', 'Choose which TV seasons to request.', 400);
+    const result = await requestFromSeerr(context, { tmdbId: winner.tmdbId, mediaType: winner.mediaType, ...(input.tvSeasonPolicy ? { tvSeasonPolicy: input.tvSeasonPolicy } : {}) });
+    await app.db.insert(auditEvents).values({ householdId: winner.householdId, roomId, actorType: 'PARTICIPANT', actorId: participant.id, eventType: 'WINNER_MEDIA_REQUESTED', metadata: { mediaType: winner.mediaType, title: winner.title, requestId: result.requestId, tvSeasonPolicy: input.tvSeasonPolicy ?? null } });
+    return { requested: true, requestId: result.requestId, status: result.status };
   });
   app.post('/api/rooms/:roomId/display-pairing-codes', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request) => {
     await mutationGuard(request); const { roomId } = parse(ParamsRoomSchema, request.params);

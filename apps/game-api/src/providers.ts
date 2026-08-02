@@ -1,4 +1,4 @@
-import { TmdbRecommendationsResultSchema, TmdbSearchResultSchema, type CanonicalMediaItem, type ProviderOperation, type RecommendationCandidate } from '@watch-bracket/provider-contracts';
+import { PlexInventoryResultSchema, SeerrRequestResultSchema, SeerrStatusResultSchema, TautulliHistoryResultSchema, TmdbRecommendationsResultSchema, TmdbSearchResultSchema, type CanonicalMediaItem, type ProviderOperation, type RecommendationCandidate } from '@watch-bracket/provider-contracts';
 import type { DomainContext } from './domain.js';
 import { DomainError } from './domain.js';
 
@@ -33,4 +33,34 @@ export async function recommendFromTmdb(ctx: DomainContext, input: { seeds: Arra
   const parsed = TmdbRecommendationsResultSchema.safeParse(payload);
   if (!parsed.success) throw new DomainError('RECOMMENDATIONS_INVALID_RESPONSE', 'The recommendation provider returned an invalid response.', 502);
   return { candidates: parsed.data.candidates, cachedUntil: parsed.data.cachedUntil };
+}
+
+export async function enrichWithHouseholdProviders(ctx: DomainContext, items: CanonicalMediaItem[]): Promise<CanonicalMediaItem[]> {
+  if (!items.length) return items;
+  const [plexPayload, seerrPayload, historyPayload] = await Promise.all([
+    operation(ctx, { provider: 'PLEX', operation: 'PLEX_INVENTORY', input: {} }).catch(() => undefined),
+    operation(ctx, { provider: 'SEERR', operation: 'SEERR_STATUS', input: { items: items.map(({ tmdbId, mediaType }) => ({ tmdbId, mediaType })) } }).catch(() => undefined),
+    operation(ctx, { provider: 'TAUTULLI', operation: 'TAUTULLI_HISTORY', input: { limit: 500 } }).catch(() => undefined)
+  ]);
+  const inventory = PlexInventoryResultSchema.safeParse(plexPayload);
+  const statuses = SeerrStatusResultSchema.safeParse(seerrPayload);
+  const history = TautulliHistoryResultSchema.safeParse(historyPayload);
+  return items.map((item) => {
+    const local = inventory.success ? inventory.data.items.find((entry) => entry.tmdbId === item.tmdbId && entry.mediaType === item.mediaType) : undefined;
+    const request = statuses.success ? statuses.data.items.find((entry) => entry.tmdbId === item.tmdbId && entry.mediaType === item.mediaType) : undefined;
+    const watched = history.success ? history.data.items.find((entry) => entry.tmdbId === item.tmdbId && (!entry.mediaType || entry.mediaType === item.mediaType)) : undefined;
+    return {
+      ...item,
+      ...(local ? { localAvailability: { available: true, plexUrl: local.plexUrl, libraryTitle: local.libraryTitle, episodeCount: local.episodeCount } } : {}),
+      ...(request ? { requestAvailability: { status: request.status, requestable: request.requestable } } : {}),
+      ...(watched ? { householdHistoryScore: watched.playCount } : {})
+    };
+  });
+}
+
+export async function requestFromSeerr(ctx: DomainContext, input: { tmdbId: number; mediaType: 'MOVIE' | 'TV'; tvSeasonPolicy?: 'FIRST' | 'LATEST' | 'ALL' }) {
+  const payload = await operation(ctx, { provider: 'SEERR', operation: 'SEERR_REQUEST', input });
+  const parsed = SeerrRequestResultSchema.safeParse(payload);
+  if (!parsed.success) throw new DomainError('SEERR_INVALID_RESPONSE', 'The request service returned an invalid response.', 502);
+  return parsed.data;
 }

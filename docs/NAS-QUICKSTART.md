@@ -16,7 +16,7 @@ docker network create watchbracket_edge
 
 If an existing reverse proxy or Cloudflare Tunnel already uses a Docker network, set `EDGE_NETWORK_NAME` to that external network instead of creating `watchbracket_edge`.
 
-Replace every `replace-me` database password, bootstrap password, pepper, CSRF secret, and shared integration secret. The database URL must use the same PostgreSQL password, and `INTEGRATION_SERVICE_SHARED_SECRET` must match in both files. `TMDB_API_READ_TOKEN` is required for production catalog search and recommendations; Plex, Tautulli, and Seerr credentials remain optional until Milestone 6.
+Replace every `replace-me` database password, bootstrap password, pepper, CSRF secret, and shared integration secret. The database URL must use the same PostgreSQL password, and `INTEGRATION_SERVICE_SHARED_SECRET` must match in both files. `TMDB_API_READ_TOKEN` is required for production catalog search and recommendations. Plex, Tautulli, and Seerr credentials are optional; when configured, the setup wizard verifies their health without exposing their values.
 
 Attach your reverse-proxy container to `watchbracket_edge`, adapt `infra/caddy/Caddyfile.example` for your hostname, and route only through that proxy. The app expects HTTPS in production because authentication cookies are secure.
 

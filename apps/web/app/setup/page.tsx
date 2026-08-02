@@ -1,30 +1,358 @@
-'use client';
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import type { HouseRules } from '@watch-bracket/realtime-protocol';
-import { api } from '../../lib/api';
-import { BrandLogo } from '../../components/brand-logo';
+"use client";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { HouseRules } from "@watch-bracket/realtime-protocol";
+import { api } from "../../lib/api";
+import { BrandLogo } from "../../components/brand-logo";
 
-type Setup = { name: string; region: string; timeZone: string; defaultRules: HouseRules; completed: boolean };
-type ProviderStatus = { configured: boolean; requiredVariables: string[] };
-const presets: Record<HouseRules['preset'], HouseRules> = {
-  QUICK_PICK: { preset: 'QUICK_PICK', nominationDurationSeconds: 60, nominationSlots: 2, revealMode: 'AFTER_DEADLINE' },
-  MOVIE_NIGHT: { preset: 'MOVIE_NIGHT', nominationDurationSeconds: 120, nominationSlots: 2, revealMode: 'AFTER_DEADLINE' },
-  DEEP_DIVE: { preset: 'DEEP_DIVE', nominationDurationSeconds: 180, nominationSlots: 2, revealMode: 'AFTER_DEADLINE' }
+type Setup = {
+  name: string;
+  region: string;
+  timeZone: string;
+  defaultRules: HouseRules;
+  completed: boolean;
+};
+type ProviderStatus = {
+  configured: boolean;
+  healthy?: boolean;
+  circuit?: "OPEN" | "CLOSED";
+  requiredVariables: string[];
+};
+const presets: Record<HouseRules["preset"], HouseRules> = {
+  QUICK_PICK: {
+    preset: "QUICK_PICK",
+    nominationDurationSeconds: 60,
+    nominationSlots: 2,
+    revealMode: "AFTER_DEADLINE",
+  },
+  MOVIE_NIGHT: {
+    preset: "MOVIE_NIGHT",
+    nominationDurationSeconds: 120,
+    nominationSlots: 2,
+    revealMode: "AFTER_DEADLINE",
+  },
+  DEEP_DIVE: {
+    preset: "DEEP_DIVE",
+    nominationDurationSeconds: 180,
+    nominationSlots: 2,
+    revealMode: "AFTER_DEADLINE",
+  },
 };
 
 export default function SetupPage() {
-  const router = useRouter(); const [step,setStep]=useState(0); const [setup,setSetup]=useState<Setup>(); const [providers,setProviders]=useState<Record<string,ProviderStatus>>({}); const [error,setError]=useState(''); const [saving,setSaving]=useState(false);
-  useEffect(()=>{void(async()=>{const session=await api<{authenticated:boolean}>('/api/auth/session');if(!session.authenticated){router.replace('/admin/login?next=%2Fsetup');return;}const [configuration,integrationStatus]=await Promise.all([api<Setup>('/api/admin/setup'),api<{providers?:Record<string,ProviderStatus>}>('/api/admin/integrations/status')]);setSetup(configuration);setProviders(integrationStatus.providers??{});})().catch((reason)=>setError(reason instanceof Error?reason.message:'Could not load setup'));},[router]);
-  const configuredCount=useMemo(()=>Object.values(providers).filter((provider)=>provider.configured).length,[providers]);
-  async function finish(){if(!setup)return;setSaving(true);setError('');try{await api('/api/admin/setup',{method:'PATCH',body:JSON.stringify({...setup,completed:true})});router.replace('/');}catch(reason){setError(reason instanceof Error?reason.message:'Could not save setup');setSaving(false);}}
-  if(!setup)return <main className="shell"><BrandLogo label="First-run setup"/><section className="card"><h1>Preparing setup…</h1>{error&&<p className="error">{error}</p>}</section></main>;
-  return <main className="shell stack"><BrandLogo label="First-run setup"/><div className="steps" aria-label="Setup progress">{['Welcome','Household','Defaults','Integrations','Finish'].map((label,index)=><span className={index===step?'active':''} key={label}>{index+1}. {label}</span>)}</div>{error&&<p className="error">{error}</p>}
-    {step===0&&<section className="card stack"><h1>Your watch night, self-hosted.</h1><p className="lead">This wizard stores household preferences in Watch Bracket and checks the isolated integration container. Provider secrets stay in your NAS deployment configuration and are never returned to a browser.</p><ul><li>Production-ready Docker Compose topology</li><li>Private PostgreSQL and integration networks</li><li>Chromecast and browser shared displays</li><li>TMDB metadata and Canadian streaming availability</li></ul></section>}
-    {step===1&&<section className="card stack"><h1>Household</h1><label>Household name<input value={setup.name} maxLength={80} onChange={(event)=>setSetup({...setup,name:event.target.value})}/></label><label>Region<input value={setup.region} maxLength={8} onChange={(event)=>setSetup({...setup,region:event.target.value.toUpperCase()})}/></label><label>Time zone<input value={setup.timeZone} maxLength={64} onChange={(event)=>setSetup({...setup,timeZone:event.target.value})}/></label><small className="muted">Use an IANA time zone such as America/Toronto.</small></section>}
-    {step===2&&<section className="card stack"><h1>Default house rules</h1><p className="muted">Hosts can adjust these for each room.</p>{Object.values(presets).map((rules)=><button className={`preset ${setup.defaultRules.preset===rules.preset?'selected':'secondary'}`} key={rules.preset} onClick={()=>setSetup({...setup,defaultRules:{...rules,mediaTypes:setup.defaultRules.mediaTypes,maxRuntimeMinutes:setup.defaultRules.maxRuntimeMinutes,availabilityMode:setup.defaultRules.availabilityMode}})}><span><strong>{rules.preset.replaceAll('_',' ')}</strong><br/><small>{rules.nominationDurationSeconds} seconds · two private ranked picks</small></span></button>)}<div className="two-col"><label>Allowed media<select value={(setup.defaultRules.mediaTypes??['MOVIE','TV']).join(',')} onChange={(event)=>setSetup({...setup,defaultRules:{...setup.defaultRules,mediaTypes:event.target.value.split(',') as ('MOVIE'|'TV')[]}})}><option value="MOVIE,TV">Movies &amp; TV</option><option value="MOVIE">Movies only</option><option value="TV">TV only</option></select></label><label>Maximum runtime<select value={setup.defaultRules.maxRuntimeMinutes??''} onChange={(event)=>setSetup({...setup,defaultRules:{...setup.defaultRules,maxRuntimeMinutes:event.target.value?Number(event.target.value):null}})}><option value="">No limit</option><option value="90">90 minutes</option><option value="120">120 minutes</option><option value="150">150 minutes</option><option value="180">180 minutes</option></select></label><label>Availability<select value={setup.defaultRules.availabilityMode??'ANY'} onChange={(event)=>setSetup({...setup,defaultRules:{...setup.defaultRules,availabilityMode:event.target.value as 'ANY'|'WATCH_NOW'}})}><option value="ANY">Any title</option><option value="WATCH_NOW">Streaming now in Canada</option></select></label></div></section>}
-    {step===3&&<section className="card stack"><h1>Media integrations</h1><p>{configuredCount} of 4 integration configurations detected.</p><p className="muted">Add these values to the root-owned <code>.env.integration.production</code> file on your NAS, then restart the integration-service container. Values are read only by that private service.</p>{['TMDB','PLEX','TAUTULLI','SEERR'].map((name)=>{const status=providers[name];return <div className="integration-row" key={name}><span><strong>{status?.configured?'✓':'○'} {name}</strong><br/><small className="muted">{status?.requiredVariables.join(' · ')??'Status unavailable'}</small></span><span>{status?.configured?'Configured':'Optional'}</span></div>})}<p className="notice">TMDB powers title search, metadata, artwork, and Canadian streaming availability. Plex, Tautulli, and Seerr join the recommendation pipeline in Milestone 6.</p></section>}
-    {step===4&&<section className="card stack"><h1>Ready for movie night.</h1><p className="lead">Your household defaults are ready. You can revisit this wizard from the home screen whenever your NAS configuration changes.</p><dl><dt>Household</dt><dd>{setup.name}</dd><dt>Region</dt><dd>{setup.region} · {setup.timeZone}</dd><dt>Preset</dt><dd>{setup.defaultRules.preset.replaceAll('_',' ')}</dd><dt>Integrations detected</dt><dd>{configuredCount} of 4</dd></dl></section>}
-    <nav className="actions"><button className="secondary" disabled={step===0||saving} onClick={()=>setStep((value)=>Math.max(0,value-1))}>Back</button>{step<4?<button onClick={()=>setStep((value)=>Math.min(4,value+1))}>Continue</button>:<button disabled={saving} onClick={()=>void finish()}>{saving?'Saving…':'Finish setup'}</button>}</nav>
-  </main>;
+  const router = useRouter();
+  const [step, setStep] = useState(0);
+  const [setup, setSetup] = useState<Setup>();
+  const [providers, setProviders] = useState<Record<string, ProviderStatus>>(
+    {},
+  );
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    void (async () => {
+      const session = await api<{ authenticated: boolean }>(
+        "/api/auth/session",
+      );
+      if (!session.authenticated) {
+        router.replace("/admin/login?next=%2Fsetup");
+        return;
+      }
+      const [configuration, integrationStatus] = await Promise.all([
+        api<Setup>("/api/admin/setup"),
+        api<{ providers?: Record<string, ProviderStatus> }>(
+          "/api/admin/integrations/status",
+        ),
+      ]);
+      setSetup(configuration);
+      setProviders(integrationStatus.providers ?? {});
+    })().catch((reason) =>
+      setError(
+        reason instanceof Error ? reason.message : "Could not load setup",
+      ),
+    );
+  }, [router]);
+  const configuredCount = useMemo(
+    () =>
+      Object.values(providers).filter((provider) => provider.configured).length,
+    [providers],
+  );
+  async function finish() {
+    if (!setup) return;
+    setSaving(true);
+    setError("");
+    try {
+      await api("/api/admin/setup", {
+        method: "PATCH",
+        body: JSON.stringify({ ...setup, completed: true }),
+      });
+      router.replace("/");
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Could not save setup",
+      );
+      setSaving(false);
+    }
+  }
+  if (!setup)
+    return (
+      <main className="shell">
+        <BrandLogo label="First-run setup" />
+        <section className="card">
+          <h1>Preparing setup…</h1>
+          {error && <p className="error">{error}</p>}
+        </section>
+      </main>
+    );
+  return (
+    <main className="shell stack">
+      <BrandLogo label="First-run setup" />
+      <div className="steps" aria-label="Setup progress">
+        {["Welcome", "Household", "Defaults", "Integrations", "Finish"].map(
+          (label, index) => (
+            <span className={index === step ? "active" : ""} key={label}>
+              {index + 1}. {label}
+            </span>
+          ),
+        )}
+      </div>
+      {error && <p className="error">{error}</p>}
+      {step === 0 && (
+        <section className="card stack">
+          <h1>Your watch night, self-hosted.</h1>
+          <p className="lead">
+            This wizard stores household preferences in Watch Bracket and checks
+            the isolated integration container. Provider secrets stay in your
+            NAS deployment configuration and are never returned to a browser.
+          </p>
+          <ul>
+            <li>Production-ready Docker Compose topology</li>
+            <li>Private PostgreSQL and integration networks</li>
+            <li>Chromecast and browser shared displays</li>
+            <li>TMDB metadata and Canadian streaming availability</li>
+          </ul>
+        </section>
+      )}
+      {step === 1 && (
+        <section className="card stack">
+          <h1>Household</h1>
+          <label>
+            Household name
+            <input
+              value={setup.name}
+              maxLength={80}
+              onChange={(event) =>
+                setSetup({ ...setup, name: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            Region
+            <input
+              value={setup.region}
+              maxLength={8}
+              onChange={(event) =>
+                setSetup({ ...setup, region: event.target.value.toUpperCase() })
+              }
+            />
+          </label>
+          <label>
+            Time zone
+            <input
+              value={setup.timeZone}
+              maxLength={64}
+              onChange={(event) =>
+                setSetup({ ...setup, timeZone: event.target.value })
+              }
+            />
+          </label>
+          <small className="muted">
+            Use an IANA time zone such as America/Toronto.
+          </small>
+        </section>
+      )}
+      {step === 2 && (
+        <section className="card stack">
+          <h1>Default house rules</h1>
+          <p className="muted">Hosts can adjust these for each room.</p>
+          {Object.values(presets).map((rules) => (
+            <button
+              className={`preset ${setup.defaultRules.preset === rules.preset ? "selected" : "secondary"}`}
+              key={rules.preset}
+              onClick={() =>
+                setSetup({
+                  ...setup,
+                  defaultRules: {
+                    ...rules,
+                    mediaTypes: setup.defaultRules.mediaTypes,
+                    maxRuntimeMinutes: setup.defaultRules.maxRuntimeMinutes,
+                    availabilityMode: setup.defaultRules.availabilityMode,
+                  },
+                })
+              }
+            >
+              <span>
+                <strong>{rules.preset.replaceAll("_", " ")}</strong>
+                <br />
+                <small>
+                  {rules.nominationDurationSeconds} seconds · two private ranked
+                  picks
+                </small>
+              </span>
+            </button>
+          ))}
+          <div className="two-col">
+            <label>
+              Allowed media
+              <select
+                value={(setup.defaultRules.mediaTypes ?? ["MOVIE", "TV"]).join(
+                  ",",
+                )}
+                onChange={(event) =>
+                  setSetup({
+                    ...setup,
+                    defaultRules: {
+                      ...setup.defaultRules,
+                      mediaTypes: event.target.value.split(",") as (
+                        | "MOVIE"
+                        | "TV"
+                      )[],
+                    },
+                  })
+                }
+              >
+                <option value="MOVIE,TV">Movies &amp; TV</option>
+                <option value="MOVIE">Movies only</option>
+                <option value="TV">TV only</option>
+              </select>
+            </label>
+            <label>
+              Maximum runtime
+              <select
+                value={setup.defaultRules.maxRuntimeMinutes ?? ""}
+                onChange={(event) =>
+                  setSetup({
+                    ...setup,
+                    defaultRules: {
+                      ...setup.defaultRules,
+                      maxRuntimeMinutes: event.target.value
+                        ? Number(event.target.value)
+                        : null,
+                    },
+                  })
+                }
+              >
+                <option value="">No limit</option>
+                <option value="90">90 minutes</option>
+                <option value="120">120 minutes</option>
+                <option value="150">150 minutes</option>
+                <option value="180">180 minutes</option>
+              </select>
+            </label>
+            <label>
+              Availability
+              <select
+                value={setup.defaultRules.availabilityMode ?? "ANY"}
+                onChange={(event) =>
+                  setSetup({
+                    ...setup,
+                    defaultRules: {
+                      ...setup.defaultRules,
+                      availabilityMode: event.target.value as
+                        | "ANY"
+                        | "WATCH_NOW"
+                        | "HYBRID",
+                    },
+                  })
+                }
+              >
+                <option value="ANY">Any title</option>
+                <option value="WATCH_NOW">Watch now: Plex or streaming</option>
+                <option value="HYBRID">Watch now or requestable</option>
+              </select>
+            </label>
+          </div>
+        </section>
+      )}
+      {step === 3 && (
+        <section className="card stack">
+          <h1>Media integrations</h1>
+          <p>{configuredCount} of 4 integration configurations detected.</p>
+          <p className="muted">
+            Add these values to the root-owned{" "}
+            <code>.env.integration.production</code> file on your NAS, then
+            restart the integration-service container. Values are read only by
+            that private service.
+          </p>
+          {["TMDB", "PLEX", "TAUTULLI", "SEERR"].map((name) => {
+            const status = providers[name];
+            return (
+              <div className="integration-row" key={name}>
+                <span>
+                  <strong>
+                    {status?.configured ? "✓" : "○"} {name}
+                  </strong>
+                  <br />
+                  <small className="muted">
+                    {status?.requiredVariables.join(" · ") ??
+                      "Status unavailable"}
+                  </small>
+                </span>
+                <span>
+                  {!status?.configured
+                    ? "Optional"
+                    : status.healthy === false
+                      ? "Needs attention"
+                      : "Connected"}
+                </span>
+              </div>
+            );
+          })}
+          <p className="notice">
+            Plex inventory refreshes privately, Tautulli contributes aggregate
+            household taste signals, and Seerr exposes requestability without
+            sending API keys or personal history to browsers.
+          </p>
+        </section>
+      )}
+      {step === 4 && (
+        <section className="card stack">
+          <h1>Ready for movie night.</h1>
+          <p className="lead">
+            Your household defaults are ready. You can revisit this wizard from
+            the home screen whenever your NAS configuration changes.
+          </p>
+          <dl>
+            <dt>Household</dt>
+            <dd>{setup.name}</dd>
+            <dt>Region</dt>
+            <dd>
+              {setup.region} · {setup.timeZone}
+            </dd>
+            <dt>Preset</dt>
+            <dd>{setup.defaultRules.preset.replaceAll("_", " ")}</dd>
+            <dt>Integrations detected</dt>
+            <dd>{configuredCount} of 4</dd>
+          </dl>
+        </section>
+      )}
+      <nav className="actions">
+        <button
+          className="secondary"
+          disabled={step === 0 || saving}
+          onClick={() => setStep((value) => Math.max(0, value - 1))}
+        >
+          Back
+        </button>
+        {step < 4 ? (
+          <button onClick={() => setStep((value) => Math.min(4, value + 1))}>
+            Continue
+          </button>
+        ) : (
+          <button disabled={saving} onClick={() => void finish()}>
+            {saving ? "Saving…" : "Finish setup"}
+          </button>
+        )}
+      </nav>
+    </main>
+  );
 }

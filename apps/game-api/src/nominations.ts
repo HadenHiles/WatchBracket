@@ -6,7 +6,7 @@ import type { CanonicalMediaItem } from '@watch-bracket/provider-contracts';
 import { HouseRulesSchema, type HouseRules } from '@watch-bracket/realtime-protocol';
 import type { DomainContext } from './domain.js';
 import { DomainError, requireRoomHost } from './domain.js';
-import { searchTmdb } from './providers.js';
+import { enrichWithHouseholdProviders, searchTmdb } from './providers.js';
 import { eligibilityFailures } from './eligibility.js';
 
 export const HOUSE_RULE_PRESETS: Record<HouseRules['preset'], HouseRules> = {
@@ -28,11 +28,11 @@ export async function cacheTmdbItems(ctx: DomainContext, items: CanonicalMediaIt
       catalogKey: item.catalogKey, tmdbId: item.tmdbId, mediaType: item.mediaType, title: item.title, originalTitle: item.originalTitle, releaseDate: item.releaseDate, releaseYear: item.releaseYear,
       runtimeMinutes: item.runtimeMinutes, contentRating: item.contentRating, genres: item.genres, synopsis: item.synopsis, posterUrl: item.posterUrl,
       backdropUrl: item.backdropUrl, metadataExpiresAt: new Date(cachedUntil),
-      metadata: { source: 'TMDB', tmdbId: item.tmdbId, releaseDate: item.releaseDate, backdropUrl: item.backdropUrl, popularity: item.popularity, voteAverage: item.voteAverage, voteCount: item.voteCount, adult: item.adult, availability: item.availability, metadataExpiresAt: cachedUntil }
+      metadata: { source: 'TMDB', tmdbId: item.tmdbId, releaseDate: item.releaseDate, backdropUrl: item.backdropUrl, popularity: item.popularity, voteAverage: item.voteAverage, voteCount: item.voteCount, adult: item.adult, availability: item.availability, localAvailability: item.localAvailability, requestAvailability: item.requestAvailability, householdHistoryScore: item.householdHistoryScore, metadataExpiresAt: cachedUntil }
     }).onConflictDoUpdate({ target: mediaItems.catalogKey, set: {
       tmdbId: item.tmdbId, mediaType: item.mediaType, title: item.title, originalTitle: item.originalTitle, releaseDate: item.releaseDate, releaseYear: item.releaseYear, runtimeMinutes: item.runtimeMinutes,
       contentRating: item.contentRating, genres: item.genres, synopsis: item.synopsis, posterUrl: item.posterUrl,
-      backdropUrl: item.backdropUrl, metadataExpiresAt: new Date(cachedUntil), metadata: { source: 'TMDB', tmdbId: item.tmdbId, releaseDate: item.releaseDate, backdropUrl: item.backdropUrl, popularity: item.popularity, voteAverage: item.voteAverage, voteCount: item.voteCount, adult: item.adult, availability: item.availability, metadataExpiresAt: cachedUntil }, updatedAt: new Date()
+      backdropUrl: item.backdropUrl, metadataExpiresAt: new Date(cachedUntil), metadata: { source: 'TMDB', tmdbId: item.tmdbId, releaseDate: item.releaseDate, backdropUrl: item.backdropUrl, popularity: item.popularity, voteAverage: item.voteAverage, voteCount: item.voteCount, adult: item.adult, availability: item.availability, localAvailability: item.localAvailability, requestAvailability: item.requestAvailability, householdHistoryScore: item.householdHistoryScore, metadataExpiresAt: cachedUntil }, updatedAt: new Date()
     } }).returning({ id: mediaItems.id });
     if (stored) await ctx.db.insert(availabilitySnapshots).values({ roomId, mediaItemId: stored.id, sourceType: 'TMDB_WATCH_PROVIDERS', sourceId: item.availability.region, status: item.availability.offers.length ? 'AVAILABLE' : 'NONE_FOUND', details: item.availability, expiresAt: new Date(cachedUntil) });
   }
@@ -45,9 +45,10 @@ export async function searchCatalog(ctx: DomainContext, roomId: string, query: s
   const rules = HouseRulesSchema.parse(room.rules);
   try {
     const result = await searchTmdb(ctx, { query, mediaType, region: household?.region??'CA' });
-    const valid = result.items.filter((item) => eligibilityFailures(item, rules).length === 0);
+    const enriched = await enrichWithHouseholdProviders(ctx, result.items);
+    const valid = enriched.filter((item) => eligibilityFailures(item, rules).length === 0);
     await cacheTmdbItems(ctx, valid, result.cachedUntil);
-    return { source: 'TMDB' as const, items: valid.map((item) => ({ catalogKey: item.catalogKey, mediaType: item.mediaType, title: item.title, releaseYear: item.releaseYear, runtimeMinutes: item.runtimeMinutes!, contentRating: item.contentRating ?? 'Unrated', genres: item.genres, synopsis: item.synopsis, posterUrl: item.posterUrl, availability: item.availability })) };
+    return { source: 'TMDB' as const, items: valid.map((item) => ({ catalogKey: item.catalogKey, mediaType: item.mediaType, title: item.title, releaseYear: item.releaseYear, runtimeMinutes: item.runtimeMinutes!, contentRating: item.contentRating ?? 'Unrated', genres: item.genres, synopsis: item.synopsis, posterUrl: item.posterUrl, availability: item.availability, localAvailability: item.localAvailability, requestAvailability: item.requestAvailability })) };
   } catch (error) {
     if (ctx.env.NODE_ENV === 'production') throw error;
     return { source: 'MOCK' as const, warning: 'TMDB is unavailable; using the deterministic development catalog.', items: searchMockCatalog(query, mediaType).filter((item)=>eligibilityFailures(item,rules).length===0) };

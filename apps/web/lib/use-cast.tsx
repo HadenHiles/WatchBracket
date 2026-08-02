@@ -1,5 +1,5 @@
 'use client';
-import { createElement, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CAST_NAMESPACE, CastLaunchEnvelopeSchema } from '@watch-bracket/display-protocol';
 import { api } from './api';
 
@@ -41,6 +41,5 @@ export function useCast({ enabled, roomId, activeDisplay }: { enabled: boolean; 
   },[appId,enabled,roomId,sendLaunch]);
   const requestSession=useCallback(async()=>{try{await contextRef.current?.requestSession();}catch{setState('ready');}},[]);
   const disconnect=useCallback(async()=>{try{if(activeRef.current?.id)await api(`/api/displays/${activeRef.current.id}`,{method:'DELETE',body:'{}'});}finally{contextRef.current?.endCurrentSession(true);setState('ready');}},[]);
-  const launcher=state==='ready'||state==='connected'||state==='connecting'?createElement('google-cast-launcher',{className:'cast-launcher','aria-label':'Cast Watch Bracket to a TV'}):null;
-  return{state,deviceName,message,launcher,requestSession,disconnect};
+  return{state,deviceName,message,requestSession,disconnect};
 }

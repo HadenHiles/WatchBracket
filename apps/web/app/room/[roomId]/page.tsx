@@ -53,6 +53,17 @@ function useCountdown(deadline: string | null | undefined) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
+function CastGlyph() {
+  return (
+    <svg className="cast-glyph" viewBox="0 0 32 32" aria-hidden="true">
+      <rect x="3" y="4" width="26" height="19" rx="2" />
+      <path d="M4 25a3 3 0 0 1 3 3H4z" />
+      <path d="M4 20a8 8 0 0 1 8 8" />
+      <path d="M4 15a13 13 0 0 1 13 13" />
+    </svg>
+  );
+}
+
 export default function RoomPage() {
   const { roomId } = useParams<{ roomId: string }>();
   const router = useRouter();
@@ -233,6 +244,15 @@ export default function RoomPage() {
   const revealed = snapshot.state === "NOMINATIONS_LOCKED";
   const champion = snapshot.tournament?.champion;
   const winnerActionUrl = champion?.localAvailability?.plexUrl ?? champion?.availability?.link ?? window.location.href;
+  const canStartCast = cast.state === "ready";
+  const castButtonLabel =
+    cast.state === "loading"
+      ? "Finding TVs…"
+      : cast.state === "connecting"
+        ? "Connecting…"
+        : cast.state === "connected"
+          ? `Casting to ${cast.deviceName}`
+          : "Cast to TV";
   return (
     <main className="shell stack">
       <BrandLogo label="Movie night" />
@@ -279,6 +299,41 @@ export default function RoomPage() {
           <span>{snapshot.locked ? "🔒 Locked" : "● Open"}</span>
         </div>
       </section>
+      {host && !castDisplay && (
+        <section className="card cast-callout" aria-labelledby="cast-heading">
+          <div className="cast-callout-copy">
+            <p className="kicker">Big-screen mode</p>
+            <h2 id="cast-heading">Put the bracket on the TV</h2>
+            <p className="muted">
+              Open the device picker and launch Watch Bracket on an available
+              Chromecast or Cast-enabled television.
+            </p>
+          </div>
+          <button
+            className="cast-primary"
+            onClick={() => void cast.requestSession()}
+            disabled={!canStartCast}
+          >
+            <CastGlyph />
+            <span>
+              <strong>{castButtonLabel}</strong>
+              <small>
+                {canStartCast
+                  ? "Choose a screen nearby"
+                  : cast.state === "loading"
+                    ? "Checking for Cast devices"
+                    : "Google Cast"}
+              </small>
+            </span>
+          </button>
+          {cast.state === "connected" && (
+            <button className="secondary" onClick={() => void cast.disconnect()}>
+              Stop casting
+            </button>
+          )}
+          {cast.message && <p className="cast-help muted">{cast.message}</p>}
+        </section>
+      )}
       {snapshot.state === "LOBBY" && (
         <>
           <div className="two-col lobby-grid">
@@ -948,9 +1003,7 @@ export default function RoomPage() {
             <button className="secondary" onClick={pairing}>
               Pair browser display
             </button>
-            {cast.launcher}
           </div>
-          {cast.message && <p className="muted">{cast.message}</p>}
           {pairingCode && (
             <p>
               Enter this on the shared display:{" "}

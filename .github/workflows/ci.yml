@@ -76,11 +76,18 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:migrate
       - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm --filter @watch-bracket/web build
       - name: Start application
         run: |
           NODE_ENV=test pnpm --filter @watch-bracket/game-api dev > game-api.log 2>&1 &
-          NODE_ENV=development pnpm --filter @watch-bracket/web dev > web.log 2>&1 &
-          for attempt in {1..60}; do curl --fail --silent http://127.0.0.1:3000/api/health/ready && exit 0; sleep 2; done
+          pnpm --filter @watch-bracket/web start > web.log 2>&1 &
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:3000/api/health/ready >/dev/null; then
+              curl --fail --silent http://127.0.0.1:3000/ >/dev/null
+              exit 0
+            fi
+            sleep 2
+          done
           cat game-api.log web.log
           exit 1
       - run: pnpm test:e2e

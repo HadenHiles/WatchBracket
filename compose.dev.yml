@@ -56,7 +56,7 @@ services:
     build:
       context: .
       dockerfile: infra/docker/web.Dockerfile
-      args: { GAME_API_INTERNAL_URL: "http://game-api:3001", NEXT_PUBLIC_ENABLE_PRESENTATION_TEST_MODE: "true", CAST_RECEIVER_APP_ID: "${CAST_RECEIVER_APP_ID:-}" }
+      args: { GAME_API_INTERNAL_URL: "http://game-api:3001", PUBLIC_APP_URL: "http://localhost:3000", NEXT_PUBLIC_ENABLE_PRESENTATION_TEST_MODE: "true", CAST_RECEIVER_APP_ID: "${CAST_RECEIVER_APP_ID:-}" }
     ports: ["127.0.0.1:3000:3000"]
     depends_on: { game-api: { condition: service_healthy } }
     healthcheck: { test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/"], interval: 10s, timeout: 3s, retries: 10 }

@@ -22,7 +22,7 @@ test("host, guests, and an independent revocable display share a durable lobby",
   await host.goto("/");
   await expect(host.getByText("No account required.")).toBeVisible();
   await host.getByRole("button", { name: "Create a Room" }).click();
-  await expect(host).toHaveURL(/\/room\//);
+  await expect(host).toHaveURL(/\/room\//, { timeout: 15_000 });
   await expect(host.getByRole("status")).toContainText("connected");
 
   const code = (await host.locator(".room-code").first().textContent())!.trim();

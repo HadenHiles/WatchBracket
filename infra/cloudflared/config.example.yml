@@ -1,0 +1,12 @@
+tunnel: replace-with-tunnel-uuid
+credentials-file: /etc/cloudflared/replace-with-tunnel-uuid.json
+ingress:
+  - hostname: bracket.famflix.live
+    service: https://caddy:443
+    originRequest:
+      noTLSVerify: true
+  - hostname: vote.famflix.live
+    service: https://caddy:443
+    originRequest:
+      noTLSVerify: true
+  - service: http_status:404

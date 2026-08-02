@@ -1,0 +1,70 @@
+# Development-only loopback bindings. Do not copy these ports into production.
+services:
+  postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_DB: watchbracket
+      POSTGRES_USER: watchbracket
+      POSTGRES_PASSWORD: watchbracket-dev-only
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["watchbracket_pg_dev:/var/lib/postgresql/data"]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U watchbracket"], interval: 5s, timeout: 3s, retries: 20 }
+
+  migrate:
+    build: { context: ., dockerfile: infra/docker/game-api.Dockerfile }
+    command: ["node", "dist/migrate.js"]
+    environment: { DATABASE_URL: "postgres://watchbracket:watchbracket-dev-only@postgres:5432/watchbracket" }
+    depends_on: { postgres: { condition: service_healthy } }
+
+  integration-service:
+    build: { context: ., dockerfile: infra/docker/integration-service.Dockerfile }
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://watchbracket:watchbracket-dev-only@postgres:5432/watchbracket
+      INTEGRATION_SERVICE_SHARED_SECRET: development-integration-secret
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    healthcheck: { test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3002/internal/health/ready"], interval: 10s, timeout: 3s, retries: 10 }
+
+  game-api:
+    build: { context: ., dockerfile: infra/docker/game-api.Dockerfile }
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgres://watchbracket:watchbracket-dev-only@postgres:5432/watchbracket
+      PUBLIC_APP_URL: http://localhost:3000
+      PUBLIC_ALIAS_URL: http://vote.localhost:3000
+      ADMIN_BOOTSTRAP_EMAIL: host@example.com
+      ADMIN_BOOTSTRAP_PASSWORD: correct-horse-battery-staple
+      HOST_SESSION_PEPPER: development-host-session-pepper
+      PARTICIPANT_SESSION_PEPPER: development-participant-session-pepper
+      DISPLAY_SESSION_PEPPER: development-display-session-pepper
+      CSRF_SECRET: development-csrf-secret-value
+      INTEGRATION_SERVICE_INTERNAL_URL: http://integration-service:3002
+      INTEGRATION_SERVICE_SHARED_SECRET: development-integration-secret
+      ROOM_CODE_LENGTH: 6
+      ROOM_MAX_PARTICIPANTS: 8
+      ROOM_TTL_HOURS: 12
+      DISPLAY_PAIRING_TTL_SECONDS: 300
+    ports: ["127.0.0.1:3001:3001"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      integration-service: { condition: service_healthy }
+    healthcheck: { test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3001/api/health/ready"], interval: 10s, timeout: 3s, retries: 10 }
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+      args: { GAME_API_INTERNAL_URL: "http://game-api:3001", NEXT_PUBLIC_ENABLE_PRESENTATION_TEST_MODE: "true" }
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on: { game-api: { condition: service_healthy } }
+    healthcheck: { test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/"], interval: 10s, timeout: 3s, retries: 10 }
+
+  cast-receiver:
+    build: { context: ., dockerfile: infra/docker/cast-receiver.Dockerfile }
+    ports: ["127.0.0.1:3003:8080"]
+    healthcheck: { test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/health"], interval: 10s, timeout: 3s, retries: 10 }
+
+volumes:
+  watchbracket_pg_dev:
+

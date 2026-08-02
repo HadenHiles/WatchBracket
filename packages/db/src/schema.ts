@@ -1,0 +1,116 @@
+import { sql } from 'drizzle-orm';
+import { bigint, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
+
+export const adminRole = pgEnum('admin_role', ['ADMIN']);
+export const roomState = pgEnum('room_state', ['LOBBY', 'EXPIRED']);
+export const participantRole = pgEnum('participant_role', ['HOST', 'PARTICIPANT', 'CO_HOST', 'SPECTATOR']);
+export const displayKind = pgEnum('display_kind', ['BROWSER']);
+export const actorType = pgEnum('actor_type', ['ADMIN', 'PARTICIPANT', 'DISPLAY', 'SYSTEM']);
+
+const timestamps = {
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+};
+
+export const adminUsers = pgTable('admin_users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull(),
+  passwordHash: text('password_hash').notNull(),
+  role: adminRole('role').notNull().default('ADMIN'),
+  ...timestamps,
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true })
+}, (table) => [uniqueIndex('admin_users_email_uq').on(table.email)]);
+
+export const households = pgTable('households', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  region: text('region').notNull().default('CA'),
+  timeZone: text('time_zone').notNull().default('America/Toronto'),
+  ...timestamps
+});
+
+export const adminSessions = pgTable('admin_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  adminUserId: uuid('admin_user_id').notNull().references(() => adminUsers.id, { onDelete: 'cascade' }),
+  tokenHash: text('session_token_hash').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow()
+}, (table) => [uniqueIndex('admin_sessions_token_uq').on(table.tokenHash), index('admin_sessions_active_idx').on(table.adminUserId, table.expiresAt, table.revokedAt)]);
+
+export const rooms = pgTable('rooms', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  householdId: uuid('household_id').notNull().references(() => households.id),
+  code: text('code').notNull(),
+  name: text('name').notNull(),
+  state: roomState('state').notNull().default('LOBBY'),
+  hostParticipantId: uuid('host_participant_id').references((): AnyPgColumn => participants.id),
+  lockedAt: timestamp('locked_at', { withTimezone: true }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  version: bigint('version', { mode: 'number' }).notNull().default(0),
+  ...timestamps
+}, (table) => [uniqueIndex('rooms_code_uq').on(table.code), index('rooms_expiration_idx').on(table.state, table.expiresAt)]);
+
+export const participants = pgTable('participants', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  roomId: uuid('room_id').notNull().references(() => rooms.id, { onDelete: 'cascade' }),
+  normalizedNickname: text('normalized_nickname').notNull(),
+  displayNickname: text('display_nickname').notNull(),
+  role: participantRole('role').notNull().default('PARTICIPANT'),
+  tokenHash: text('session_token_hash').notNull(),
+  joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  removedAt: timestamp('removed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, (table) => [
+  uniqueIndex('participants_token_uq').on(table.tokenHash),
+  uniqueIndex('participants_active_nickname_uq').on(table.roomId, table.normalizedNickname).where(sql`${table.removedAt} is null`),
+  index('participants_room_idx').on(table.roomId)
+]);
+
+export const displayPairingCodes = pgTable('display_pairing_codes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  roomId: uuid('room_id').notNull().references(() => rooms.id, { onDelete: 'cascade' }),
+  codeHash: text('pairing_code_hash').notNull(),
+  attemptCount: integer('attempt_count').notNull().default(0),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, (table) => [uniqueIndex('display_pairing_codes_hash_uq').on(table.codeHash), index('display_pairing_codes_expiry_idx').on(table.expiresAt)]);
+
+export const displaySessions = pgTable('display_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  roomId: uuid('room_id').notNull().references(() => rooms.id, { onDelete: 'cascade' }),
+  kind: displayKind('kind').notNull().default('BROWSER'),
+  displayName: text('display_name').notNull(),
+  tokenHash: text('session_token_hash').notNull(),
+  pairedByParticipantId: uuid('paired_by_participant_id').notNull().references(() => participants.id),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, (table) => [uniqueIndex('display_sessions_token_uq').on(table.tokenHash), index('display_sessions_active_idx').on(table.roomId, table.expiresAt, table.revokedAt)]);
+
+export const idempotencyKeys = pgTable('idempotency_keys', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  scope: text('scope').notNull(),
+  actorIdentifier: text('actor_identifier').notNull(),
+  key: text('idempotency_key').notNull(),
+  requestFingerprint: text('request_fingerprint').notNull(),
+  responseStatus: integer('response_status').notNull(),
+  responseBody: jsonb('response_body').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, (table) => [uniqueIndex('idempotency_scope_actor_key_uq').on(table.scope, table.actorIdentifier, table.key), index('idempotency_expiry_idx').on(table.expiresAt)]);
+
+export const auditEvents = pgTable('audit_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  householdId: uuid('household_id').notNull().references(() => households.id),
+  roomId: uuid('room_id').references(() => rooms.id, { onDelete: 'set null' }),
+  actorType: actorType('actor_type').notNull(),
+  actorId: uuid('actor_id'),
+  eventType: text('event_type').notNull(),
+  metadata: jsonb('safe_metadata').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});

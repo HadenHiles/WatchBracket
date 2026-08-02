@@ -1,0 +1,27 @@
+# Security model
+
+## Trust boundaries
+
+The browser communicates only with the public Caddy origin. `game-api` owns authorization and room state. PostgreSQL is private durable storage. `integration-service` is a separate internal boundary and is not publicly routed. The static receiver contains no secrets.
+
+Host, participant, and display credentials are separate opaque tokens. Only keyed HMAC hashes are stored in PostgreSQL. Cookies are HTTP-only, Secure in production, SameSite=Lax, scoped to the application, and explicitly expired. Cookie-authenticated mutations require an origin check and signed double-submit CSRF token. Login, joining, and pairing are rate-limited.
+
+## Authorization classes
+
+- Admin session: may create rooms; cannot stand in for a participant session.
+- Host participant: a normal participant linked as the room host; may lock, unlock, pair, and revoke displays.
+- Guest participant: room-scoped membership and presence only.
+- Browser display: room-scoped read-only snapshot and display events only; it cannot call participant or host mutations.
+
+Room and pairing codes are lookup handles, not sessions. Pairing codes expire within five minutes, are one-time use, are attempt/rate limited, and are stored only as hashes.
+
+## Defensive controls
+
+All environment, HTTP, internal-provider, and realtime inputs use Zod schemas. Request bodies and Socket.IO buffers are bounded. Errors use stable codes and request IDs. Pino redacts cookies, authorization, CSRF material, passwords, and tokens. Audit metadata contains IDs and safe action context only.
+
+The integration boundary has no generic proxy or user-controlled URL operation. Future provider base URLs are deployment configuration, never guest input.
+
+The example Caddy configuration applies HSTS, nosniff, referrer, and permissions headers. The receiver gets a narrow CSP. Do not weaken it to admit arbitrary scripts, images, or connection destinations.
+
+For a future public release, security reports will be accepted through a private advisory channel documented in `SECURITY.md`; the private deployment currently has no public reporting address.
+

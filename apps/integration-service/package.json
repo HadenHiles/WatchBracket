@@ -1,0 +1,9 @@
+{
+  "name": "@watch-bracket/integration-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "tsx watch src/server.ts", "build": "tsup", "start": "node dist/server.js", "typecheck": "tsc --noEmit" },
+  "dependencies": { "@watch-bracket/config": "workspace:*", "@watch-bracket/provider-contracts": "workspace:*", "fastify": "5.11.0", "zod": "4.4.3" },
+  "devDependencies": { "@types/node": "24.3.0", "tsx": "4.20.4", "tsup": "8.5.1", "typescript": "6.0.2" }
+}

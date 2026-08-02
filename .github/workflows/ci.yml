@@ -1,0 +1,106 @@
+name: CI
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        env:
+          POSTGRES_DB: watchbracket_test
+          POSTGRES_USER: watchbracket
+          POSTGRES_PASSWORD: test-password
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U watchbracket"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgres://watchbracket:test-password@127.0.0.1:5432/watchbracket_test
+      TEST_DATABASE_URL: postgres://watchbracket:test-password@127.0.0.1:5432/watchbracket_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.34.5 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22.18.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm db:migrate
+      - run: pnpm test:integration
+      - run: pnpm build
+
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        env:
+          POSTGRES_DB: watchbracket_e2e
+          POSTGRES_USER: watchbracket
+          POSTGRES_PASSWORD: test-password
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U watchbracket"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgres://watchbracket:test-password@127.0.0.1:5432/watchbracket_e2e
+      PUBLIC_APP_URL: http://127.0.0.1:3000
+      PUBLIC_ALIAS_URL: http://vote.localhost:3000
+      ADMIN_BOOTSTRAP_EMAIL: host@example.com
+      ADMIN_BOOTSTRAP_PASSWORD: correct-horse-battery-staple
+      HOST_SESSION_PEPPER: e2e-host-session-pepper-value
+      PARTICIPANT_SESSION_PEPPER: e2e-participant-session-pepper
+      DISPLAY_SESSION_PEPPER: e2e-display-session-pepper-value
+      CSRF_SECRET: e2e-csrf-secret-signing-value
+      INTEGRATION_SERVICE_INTERNAL_URL: http://127.0.0.1:3002
+      INTEGRATION_SERVICE_SHARED_SECRET: e2e-integration-shared-secret
+      ROOM_CODE_LENGTH: 6
+      ROOM_MAX_PARTICIPANTS: 8
+      ROOM_TTL_HOURS: 12
+      DISPLAY_PAIRING_TTL_SECONDS: 300
+      GAME_API_INTERNAL_URL: http://127.0.0.1:3001
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.34.5 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22.18.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:migrate
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Start application
+        run: |
+          NODE_ENV=test pnpm --filter @watch-bracket/game-api dev > game-api.log 2>&1 &
+          NODE_ENV=development pnpm --filter @watch-bracket/web dev > web.log 2>&1 &
+          for attempt in {1..60}; do curl --fail --silent http://127.0.0.1:3000/api/health/ready && exit 0; sleep 2; done
+          cat game-api.log web.log
+          exit 1
+      - run: pnpm test:e2e
+
+  containers:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dockerfile:
+          - infra/docker/web.Dockerfile
+          - infra/docker/game-api.Dockerfile
+          - infra/docker/integration-service.Dockerfile
+          - infra/docker/cast-receiver.Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --file "${{ matrix.dockerfile }}" .
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cp .env.example .env.production
+      - run: docker compose --env-file .env.production -f compose.prod.yml config --quiet

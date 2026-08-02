@@ -1,0 +1,1 @@
+ALTER TABLE "rooms" ADD CONSTRAINT "rooms_host_participant_id_participants_id_fk" FOREIGN KEY ("host_participant_id") REFERENCES "public"."participants"("id") ON DELETE no action ON UPDATE no action;

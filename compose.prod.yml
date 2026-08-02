@@ -1,0 +1,108 @@
+x-hardened: &hardened
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: [/tmp:rw,noexec,nosuid,size=64m]
+
+services:
+  postgres:
+    image: postgres:17.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes: [watchbracket_pg:/var/lib/postgresql/data]
+    networks: [data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"], interval: 10s, timeout: 3s, retries: 20 }
+    mem_limit: 512m
+    cpus: 1.0
+
+  migrate:
+    <<: *hardened
+    restart: "no"
+    image: ghcr.io/example/watch-bracket-game-api:local
+    build: { context: ., dockerfile: infra/docker/game-api.Dockerfile }
+    command: ["node", "dist/migrate.js"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    networks: [data]
+    depends_on: { postgres: { condition: service_healthy } }
+
+  integration-service:
+    <<: *hardened
+    image: ghcr.io/example/watch-bracket-integration-service:local
+    build: { context: ., dockerfile: infra/docker/integration-service.Dockerfile }
+    env_file: [{ path: .env.integration.production, required: false }]
+    networks: [data, integrations]
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    healthcheck: { test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3002/internal/health/ready"], interval: 15s, timeout: 3s, retries: 10 }
+    mem_limit: 256m
+    cpus: 0.5
+
+  game-api:
+    <<: *hardened
+    image: ghcr.io/example/watch-bracket-game-api:local
+    build: { context: ., dockerfile: infra/docker/game-api.Dockerfile }
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: ${DATABASE_URL}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL}
+      PUBLIC_ALIAS_URL: ${PUBLIC_ALIAS_URL}
+      ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD}
+      HOST_SESSION_PEPPER: ${HOST_SESSION_PEPPER}
+      PARTICIPANT_SESSION_PEPPER: ${PARTICIPANT_SESSION_PEPPER}
+      DISPLAY_SESSION_PEPPER: ${DISPLAY_SESSION_PEPPER}
+      CSRF_SECRET: ${CSRF_SECRET}
+      INTEGRATION_SERVICE_INTERNAL_URL: ${INTEGRATION_SERVICE_INTERNAL_URL}
+      INTEGRATION_SERVICE_SHARED_SECRET: ${INTEGRATION_SERVICE_SHARED_SECRET}
+      ROOM_CODE_LENGTH: ${ROOM_CODE_LENGTH:-6}
+      ROOM_MAX_PARTICIPANTS: ${ROOM_MAX_PARTICIPANTS:-8}
+      ROOM_TTL_HOURS: ${ROOM_TTL_HOURS:-12}
+      DISPLAY_PAIRING_TTL_SECONDS: ${DISPLAY_PAIRING_TTL_SECONDS:-300}
+    networks: [edge, data, integrations]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      integration-service: { condition: service_healthy }
+    healthcheck: { test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3001/api/health/ready"], interval: 15s, timeout: 3s, retries: 10 }
+    mem_limit: 512m
+    cpus: 1.0
+
+  web:
+    <<: *hardened
+    image: ghcr.io/example/watch-bracket-web:local
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+      args: { GAME_API_INTERNAL_URL: "http://game-api:3001", NEXT_PUBLIC_ENABLE_PRESENTATION_TEST_MODE: "false" }
+    networks: [edge]
+    depends_on: { game-api: { condition: service_healthy } }
+    healthcheck: { test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/"], interval: 15s, timeout: 3s, retries: 10 }
+    mem_limit: 384m
+    cpus: 0.75
+
+  cast-receiver:
+    <<: *hardened
+    image: ghcr.io/example/watch-bracket-cast-receiver:local
+    build: { context: ., dockerfile: infra/docker/cast-receiver.Dockerfile }
+    networks: [edge]
+    healthcheck: { test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/health"], interval: 15s, timeout: 3s, retries: 10 }
+    mem_limit: 128m
+    cpus: 0.25
+
+networks:
+  edge:
+    name: watchbracket_edge
+    external: true
+  data:
+    name: watchbracket_data
+    internal: true
+  integrations:
+    name: watchbracket_integrations
+    internal: true
+
+volumes:
+  watchbracket_pg:

@@ -1,0 +1,12 @@
+import { z } from 'zod';
+
+export const LobbySceneSchema = z.object({
+  type: z.literal('LOBBY'), roomName: z.string(), roomCode: z.string(), joinUrl: z.url(), locked: z.boolean(),
+  participants: z.array(z.object({ nickname: z.string(), role: z.enum(['HOST', 'PARTICIPANT']), connected: z.boolean() }))
+});
+export type LobbyScene = z.infer<typeof LobbySceneSchema>;
+export const DisplayEnvelopeSchema = z.object({
+  schemaVersion: z.literal(1), eventId: z.uuid(), roomId: z.uuid(), sequence: z.number().int().nonnegative(), serverTimestamp: z.iso.datetime(), scene: LobbySceneSchema
+});
+export type DisplayEnvelope = z.infer<typeof DisplayEnvelopeSchema>;
+

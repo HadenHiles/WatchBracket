@@ -1,0 +1,35 @@
+{
+  "name": "watch-bracket",
+  "private": true,
+  "packageManager": "pnpm@10.34.5",
+  "engines": { "node": ">=22.9.0" },
+  "pnpm": { "onlyBuiltDependencies": ["esbuild", "sharp", "@node-rs/argon2"] },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @watch-bracket/game-api --filter @watch-bracket/integration-service --filter @watch-bracket/web --filter @watch-bracket/cast-receiver dev",
+    "build": "pnpm -r --if-present build",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "vitest run --exclude '**/*.integration.test.ts' --exclude 'tests/e2e/**'",
+    "test:integration": "vitest run integration",
+    "test:e2e": "playwright test",
+    "db:generate": "pnpm --filter @watch-bracket/db db:generate",
+    "db:migrate": "pnpm --filter @watch-bracket/db db:migrate",
+    "db:studio": "pnpm --filter @watch-bracket/db db:studio",
+    "compose:dev": "docker compose -f compose.dev.yml up --build",
+    "compose:prod:config": "docker compose --env-file .env.example -f compose.prod.yml config"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.62.1",
+    "@types/node": "24.3.0",
+    "@types/react": "19.1.10",
+    "@types/react-dom": "19.1.7",
+    "eslint": "10.0.1",
+    "globals": "16.3.0",
+    "tsx": "4.20.4",
+    "typescript": "6.0.2",
+    "typescript-eslint": "8.65.0",
+    "vitest": "4.1.10",
+    "yaml": "2.9.0"
+  }
+}

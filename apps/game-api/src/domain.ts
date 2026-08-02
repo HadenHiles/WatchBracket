@@ -61,6 +61,14 @@ export async function logout({ db, env }: DomainContext, token?: string) {
 }
 
 const fingerprint = (body: unknown) => createHash('sha256').update(JSON.stringify(body)).digest('hex');
+function postgresError(error: unknown) {
+  const outer = error as { code?: unknown; constraint_name?: unknown; constraint?: unknown; cause?: unknown };
+  const cause = outer?.cause as { code?: unknown; constraint_name?: unknown; constraint?: unknown } | undefined;
+  return {
+    code: String(cause?.code ?? outer?.code ?? ''),
+    constraint: String(cause?.constraint_name ?? cause?.constraint ?? outer?.constraint_name ?? outer?.constraint ?? '')
+  };
+}
 export async function createRoom(ctx: DomainContext, creatorIdentifier: string, body: { name: string; hostNickname: string }, idempotencyKey: string) {
   const { db, env } = ctx;
   const fp = fingerprint(body);
@@ -86,8 +94,9 @@ export async function createRoom(ctx: DomainContext, creatorIdentifier: string, 
         return { room: room!, participant: participant!, token };
       });
       return { replayed: false, roomId: result.room.id, ...result };
-    } catch (error: any) {
-      if (error?.code === '23505' && String(error?.constraint_name ?? error?.constraint ?? '').includes('rooms_code')) continue;
+    } catch (error: unknown) {
+      const databaseError = postgresError(error);
+      if (databaseError.code === '23505' && databaseError.constraint.includes('rooms_code')) continue;
       throw error;
     }
   }
@@ -116,8 +125,8 @@ export async function joinRoom(ctx: DomainContext, body: { roomCode: string; nic
       return inserted;
     });
     return { room, participant: participant!, token, restored: false };
-  } catch (error: any) {
-    if (error?.code === '23505') throw new DomainError('NICKNAME_TAKEN', 'That nickname is already in use.', 409);
+  } catch (error: unknown) {
+    if (postgresError(error).code === '23505') throw new DomainError('NICKNAME_TAKEN', 'That nickname is already in use.', 409);
     throw error;
   }
 }

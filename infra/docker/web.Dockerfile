@@ -1,4 +1,4 @@
-FROM node:22.18-alpine AS build
+FROM node:22-alpine AS build
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.34.5 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
@@ -15,10 +15,11 @@ ARG CAST_RECEIVER_APP_ID=
 ENV GAME_API_INTERNAL_URL=$GAME_API_INTERNAL_URL NEXT_PUBLIC_ENABLE_PRESENTATION_TEST_MODE=$NEXT_PUBLIC_ENABLE_PRESENTATION_TEST_MODE CAST_RECEIVER_APP_ID=$CAST_RECEIVER_APP_ID NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @watch-bracket/web build
 
-FROM node:22.18-alpine AS runtime
+FROM node:22-alpine AS runtime
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 WORKDIR /app
-RUN addgroup -S watchbracket && adduser -S -G watchbracket watchbracket
+RUN addgroup -S watchbracket && adduser -S -G watchbracket watchbracket \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 COPY --from=build --chown=watchbracket:watchbracket /app/apps/web/.next/standalone ./
 COPY --from=build --chown=watchbracket:watchbracket /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build --chown=watchbracket:watchbracket /app/apps/web/public ./apps/web/public

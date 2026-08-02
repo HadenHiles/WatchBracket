@@ -57,10 +57,14 @@ suite('Milestones 1 through 3 API against PostgreSQL', () => {
     expect(setup.statusCode).toBe(200); expect(setup.json()).toMatchObject({ name: 'Test Household', completed: true });
     expect((await app.inject({ method: 'GET', url: '/api/setup/status' })).json()).toEqual({ required: false });
 
-    const create = await app.inject({ method: 'POST', url: '/api/rooms', headers: { ...mutationHeaders, 'idempotency-key': 'room-create-test-0001' }, payload: { name: 'Integration Night', hostNickname: 'Haden' } });
+    const roomCreateKey = 'd9ed4dc6-cf03-45b5-90e9-92bd1d0d43e7';
+    expect((await app.inject({ method: 'POST', url: '/api/rooms', headers: { origin: 'https://attacker.example', 'idempotency-key': roomCreateKey }, payload: { name: 'Integration Night', hostNickname: 'Haden' } })).statusCode).toBe(403);
+    const create = await app.inject({ method: 'POST', url: '/api/rooms', headers: { ...origin, 'idempotency-key': roomCreateKey }, payload: { name: 'Integration Night', hostNickname: 'Haden' } });
     expect(create.statusCode).toBe(201);
     const created = create.json();
     const participantCookie = cookieValue(create, 'wb_participant');
+    const roomCsrf = cookieValue(create, 'wb_csrf');
+    expect(participantCookie).not.toBe(''); expect(roomCsrf).not.toBe('');
     const [room] = await inspector.db.select().from(rooms).where(eq(rooms.id, created.roomId));
     const people = await inspector.db.select().from(participants).where(eq(participants.roomId, created.roomId));
     expect(people).toHaveLength(1);
@@ -68,7 +72,7 @@ suite('Milestones 1 through 3 API against PostgreSQL', () => {
     expect(room!.hostParticipantId).toBe(people[0]!.id);
     expect(room!.rules).toMatchObject({ preset: 'QUICK_PICK', nominationDurationSeconds: 60 });
 
-    const replay = await app.inject({ method: 'POST', url: '/api/rooms', headers: { ...mutationHeaders, cookie: cookieHeader({ ...authCookies, wb_participant: participantCookie }), 'idempotency-key': 'room-create-test-0001' }, payload: { name: 'Integration Night', hostNickname: 'Haden' } });
+    const replay = await app.inject({ method: 'POST', url: '/api/rooms', headers: { ...origin, cookie: cookieHeader({ wb_participant: participantCookie, wb_csrf: roomCsrf }), 'idempotency-key': roomCreateKey }, payload: { name: 'Integration Night', hostNickname: 'Haden' } });
     expect(replay.statusCode).toBe(200); expect(replay.json()).toMatchObject({ roomId: created.roomId, replayed: true });
     expect(await inspector.db.select().from(rooms)).toHaveLength(1);
 
@@ -81,8 +85,8 @@ suite('Milestones 1 through 3 API against PostgreSQL', () => {
     const duplicate = await app.inject({ method: 'POST', url: '/api/rooms/join', headers: origin, payload: { roomCode: created.code, nickname: '  MAYA ' } });
     expect(duplicate.statusCode).toBe(409); expect(duplicate.json().code).toBe('NICKNAME_TAKEN');
 
-    const hostRoomCookies = cookieHeader({ ...authCookies, wb_participant: participantCookie });
-    const hostHeaders = { ...origin, cookie: hostRoomCookies, 'x-csrf-token': csrf };
+    const hostRoomCookies = cookieHeader({ wb_participant: participantCookie, wb_csrf: roomCsrf });
+    const hostHeaders = { ...origin, cookie: hostRoomCookies, 'x-csrf-token': roomCsrf };
     expect((await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/lock`, headers: { ...origin, cookie: cookieHeader({ wb_participant: guestParticipant, wb_csrf: guestCsrf }), 'x-csrf-token': guestCsrf }, payload: {} })).statusCode).toBe(403);
     expect((await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/lock`, headers: hostHeaders, payload: {} })).json()).toMatchObject({ locked: true });
     expect((await app.inject({ method: 'POST', url: '/api/rooms/join', headers: origin, payload: { roomCode: created.code, nickname: 'Alex' } })).statusCode).toBe(423);

@@ -116,13 +116,12 @@ export async function buildApp(env: GameApiEnv) {
   });
 
   app.post('/api/rooms', { config: { rateLimit: { max: 10, timeWindow: '1 hour' } } }, async (request, reply) => {
-    await mutationGuard(request);
-    const admin = await resolveAdmin(context, request.cookies[COOKIE.host]);
-    if (!admin) throw new DomainError('AUTH_REQUIRED', 'Host sign-in is required.', 401);
+    await mutationGuard(request, false);
     const body = parse(CreateRoomSchema, request.body);
     const idempotencyKey = request.headers['idempotency-key'];
-    if (typeof idempotencyKey !== 'string' || idempotencyKey.length < 8 || idempotencyKey.length > 128) throw new DomainError('IDEMPOTENCY_KEY_REQUIRED', 'A valid Idempotency-Key header is required.', 400);
-    const created = await createRoom(context, admin.adminId, body, idempotencyKey);
+    if (typeof idempotencyKey !== 'string' || !z.uuid().safeParse(idempotencyKey).success) throw new DomainError('IDEMPOTENCY_KEY_REQUIRED', 'A valid UUID Idempotency-Key header is required.', 400);
+    const creatorIdentifier = hashToken(`room-create:${idempotencyKey}`, env.PARTICIPANT_SESSION_PEPPER);
+    const created = await createRoom(context, creatorIdentifier, body, idempotencyKey);
     if (!created.replayed && 'token' in created) reply.setCookie(COOKIE.participant, created.token, cookieOptions(env));
     const [room] = await app.db.select().from(rooms).where(eq(rooms.id, created.roomId)).limit(1);
     if (!room) throw new DomainError('ROOM_NOT_FOUND', 'Room not found.', 404);
@@ -134,6 +133,7 @@ export async function buildApp(env: GameApiEnv) {
         reply.setCookie(COOKIE.participant, replacementToken, cookieOptions(env));
       }
     }
+    issueCsrf(reply, env);
     reply.status(created.replayed ? 200 : 201);
     return { roomId: room.id, name: room.name, code: room.code, state: room.state, replayed: created.replayed };
   });
@@ -226,9 +226,9 @@ export async function buildApp(env: GameApiEnv) {
   });
   app.post('/api/rooms/:roomId/cast-launch-tokens', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request) => {
     await mutationGuard(request); const { roomId } = parse(ParamsRoomSchema, request.params);
-    const [admin, participant] = await Promise.all([resolveAdmin(context, request.cookies[COOKIE.host]), resolveParticipant(context, request.cookies[COOKIE.participant])]);
-    if (!admin || !participant) throw new DomainError('HOST_REQUIRED', 'Authenticated room host authorization is required.', 403);
-    const result = await createCastLaunchToken(context, admin.sessionId, participant.id, roomId);
+    const participant = await resolveParticipant(context, request.cookies[COOKIE.participant]);
+    if (!participant) throw new DomainError('HOST_REQUIRED', 'Room host authorization is required.', 403);
+    const result = await createCastLaunchToken(context, participant.id, roomId);
     return { launchToken: result.token, protocolVersion: result.protocolVersion, expiresAt: result.expiresAt.toISOString() };
   });
   app.post('/api/displays/pair', { config: { rateLimit: { max: 10, timeWindow: '5 minutes' } } }, async (request, reply) => {

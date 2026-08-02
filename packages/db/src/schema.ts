@@ -109,7 +109,7 @@ export const displaySessions = pgTable('display_sessions', {
 export const castLaunchTokens = pgTable('cast_launch_tokens', {
   id: uuid('id').primaryKey().defaultRandom(),
   roomId: uuid('room_id').notNull().references(() => rooms.id, { onDelete: 'cascade' }),
-  issuedToHostSessionId: uuid('issued_to_host_session_id').notNull().references(() => adminSessions.id, { onDelete: 'cascade' }),
+  issuedToHostParticipantId: uuid('issued_to_host_participant_id').notNull().references(() => participants.id, { onDelete: 'cascade' }),
   tokenHash: text('token_hash').notNull(),
   protocolVersion: integer('protocol_version').notNull().default(1),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),

@@ -36,6 +36,20 @@
       "when": 1785689650175,
       "tag": "0004_motionless_talos",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785696419240,
+      "tag": "0005_add-cast-host-participant",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785696454769,
+      "tag": "0006_remove-cast-admin-session",
+      "breakpoints": true
     }
   ]
 }

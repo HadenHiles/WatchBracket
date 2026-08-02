@@ -13,7 +13,7 @@ COPY packages/tournament-engine/package.json packages/tournament-engine/package.
 RUN pnpm install --frozen-lockfile
 COPY apps/game-api apps/game-api
 COPY packages packages
-RUN pnpm --filter @watch-bracket/game-api build && pnpm deploy --filter @watch-bracket/game-api --prod /out
+RUN pnpm --filter @watch-bracket/game-api build && pnpm deploy --legacy --filter @watch-bracket/game-api --prod /out
 
 FROM node:22.18-alpine AS runtime
 ENV NODE_ENV=production

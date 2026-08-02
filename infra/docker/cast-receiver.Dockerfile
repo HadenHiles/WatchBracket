@@ -8,6 +8,7 @@ COPY packages/display-ui/package.json packages/display-ui/package.json
 COPY packages/realtime-protocol/package.json packages/realtime-protocol/package.json
 RUN pnpm install --frozen-lockfile
 COPY apps/cast-receiver apps/cast-receiver
+COPY packages packages
 RUN pnpm --filter @watch-bracket/cast-receiver build
 
 FROM nginxinc/nginx-unprivileged:1.27-alpine

@@ -8,7 +8,7 @@ COPY packages/provider-contracts/package.json packages/provider-contracts/packag
 RUN pnpm install --frozen-lockfile
 COPY apps/integration-service apps/integration-service
 COPY packages packages
-RUN pnpm --filter @watch-bracket/integration-service build && pnpm deploy --filter @watch-bracket/integration-service --prod /out
+RUN pnpm --filter @watch-bracket/integration-service build && pnpm deploy --legacy --filter @watch-bracket/integration-service --prod /out
 
 FROM node:22.18-alpine AS runtime
 ENV NODE_ENV=production

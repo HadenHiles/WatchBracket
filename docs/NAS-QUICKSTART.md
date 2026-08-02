@@ -30,6 +30,8 @@ docker compose --env-file .env.production -f compose.prod.yml ps
 
 The one-shot `migrate` service applies PostgreSQL migrations before the API starts. Persistent state lives in the named `watchbracket_pg` volume. No Compose service publishes a port directly; only the existing reverse proxy joins the external edge network.
 
+The integration service also joins an outbound-only bridge network so it can reach TMDB and configured LAN media servers. It still publishes no ports; provider base URLs and credentials belong only in `.env.integration.production`.
+
 Open the configured public URL, sign in with `ADMIN_BOOTSTRAP_EMAIL` and `ADMIN_BOOTSTRAP_PASSWORD`, and complete `/setup`.
 
 ## Upgrade and back up

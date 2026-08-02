@@ -35,7 +35,7 @@ services:
     image: ghcr.io/example/watch-bracket-integration-service:local
     build: { context: ., dockerfile: infra/docker/integration-service.Dockerfile }
     env_file: [{ path: .env.integration.production, required: true }]
-    networks: [data, integrations]
+    networks: [data, integrations, provider-egress]
     depends_on: { migrate: { condition: service_completed_successfully } }
     healthcheck: { test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3002/internal/health/ready"], interval: 15s, timeout: 3s, retries: 10 }
     mem_limit: 256m
@@ -104,6 +104,9 @@ networks:
   integrations:
     name: watchbracket_integrations
     internal: true
+  provider-egress:
+    name: watchbracket_provider_egress
+    driver: bridge
 
 volumes:
   watchbracket_pg:

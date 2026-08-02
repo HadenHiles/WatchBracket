@@ -23,6 +23,8 @@ All environment, HTTP, internal-provider, and realtime inputs use Zod schemas. R
 
 The integration boundary has no generic proxy or user-controlled URL operation. Future provider base URLs are deployment configuration, never guest input.
 
+In production, the integration service has a dedicated outbound provider network for internet and LAN API access. It publishes no ports and remains reachable from the game API only over the private internal integration network.
+
 The first-run wizard persists only non-secret household defaults. Its integration readiness call crosses the authenticated internal boundary and returns configured booleans, never credential values. Provider secrets remain in the integration-service environment or mounted secret files and are redacted from service logs.
 
 Tournament votes are room- and matchup-scoped. A unique database constraint permits one current vote per participant, updates replace the prior choice, explicit abstention cannot contain a candidate, and the server rejects votes after its stored deadline. Controller snapshots expose only the viewer's vote; displays receive completion counts before resolution and aggregate totals afterward.

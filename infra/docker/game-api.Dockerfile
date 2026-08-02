@@ -7,6 +7,7 @@ COPY packages/config/package.json packages/config/package.json
 COPY packages/db/package.json packages/db/package.json
 COPY packages/display-protocol/package.json packages/display-protocol/package.json
 COPY packages/mock-catalog/package.json packages/mock-catalog/package.json
+COPY packages/provider-contracts/package.json packages/provider-contracts/package.json
 COPY packages/realtime-protocol/package.json packages/realtime-protocol/package.json
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/tournament-engine/package.json packages/tournament-engine/package.json

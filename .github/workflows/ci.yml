@@ -24,7 +24,7 @@ jobs:
       DATABASE_URL: postgres://watchbracket:test-password@127.0.0.1:5432/watchbracket_test
       TEST_DATABASE_URL: postgres://watchbracket:test-password@127.0.0.1:5432/watchbracket_test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
         with: { version: 10.34.5 }
       - uses: actions/setup-node@v4
@@ -68,7 +68,7 @@ jobs:
       DISPLAY_PAIRING_TTL_SECONDS: 300
       GAME_API_INTERNAL_URL: http://127.0.0.1:3001
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
         with: { version: 10.34.5 }
       - uses: actions/setup-node@v4
@@ -95,13 +95,13 @@ jobs:
           - infra/docker/integration-service.Dockerfile
           - infra/docker/cast-receiver.Dockerfile
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker build --file "${{ matrix.dockerfile }}" .
 
   compose:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: cp .env.example .env.production
       - run: cp .env.integration.example .env.integration.production
       - run: docker compose --env-file .env.production -f compose.prod.yml config --quiet

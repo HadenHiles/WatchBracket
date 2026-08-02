@@ -78,7 +78,7 @@ services:
     build:
       context: .
       dockerfile: infra/docker/web.Dockerfile
-      args: { GAME_API_INTERNAL_URL: "http://game-api:3001", PUBLIC_APP_URL: "${PUBLIC_APP_URL}", NEXT_PUBLIC_ENABLE_PRESENTATION_TEST_MODE: "false", CAST_RECEIVER_APP_ID: "${CAST_RECEIVER_APP_ID}" }
+      args: { GAME_API_INTERNAL_URL: "http://game-api:3001", PUBLIC_APP_URL: "${PUBLIC_APP_URL}", PUBLIC_ALIAS_URL: "${PUBLIC_ALIAS_URL}", NEXT_PUBLIC_ENABLE_PRESENTATION_TEST_MODE: "false", CAST_RECEIVER_APP_ID: "${CAST_RECEIVER_APP_ID}" }
     networks: [edge]
     depends_on: { game-api: { condition: service_healthy } }
     healthcheck: { test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/"], interval: 15s, timeout: 3s, retries: 10 }

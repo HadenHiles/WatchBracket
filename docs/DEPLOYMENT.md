@@ -7,9 +7,9 @@ Watch Bracket is designed to join an existing Caddy and cloudflared stack. It do
 1. Create the external network once: `docker network create watchbracket_edge`.
 2. Attach the existing Caddy container to `watchbracket_edge`.
 3. Add `infra/caddy/Caddyfile.example` to the existing Caddy configuration and reload Caddy.
-4. Copy `.env.example` to `.env.production` and `.env.integration.example` to `.env.integration.production`. Replace the database and shared-secret values in both files, keep the provider values fake or omit them until needed, and restrict both files to the deployment administrator. Only the integration-service container reads the integration file.
-5. Validate with `docker compose --env-file .env.production -f compose.prod.yml config` and start with `docker compose --env-file .env.production -f compose.prod.yml up -d --build`.
-6. Open the public app, sign in with the bootstrap administrator, and complete `/setup`. The wizard saves household defaults and reports which provider variables the isolated integration container can see.
+4. Copy `.env.example` to `.env` and `.env.integration.example` to `.env.integration.production`. Replace the database and shared-secret values in both files, keep unused provider values empty, and restrict both files to the deployment administrator. Only the integration-service container reads the integration file.
+5. Validate with `docker compose config` and start with `docker compose up -d --build`.
+6. Open the public app and create a room immediately, or use **Server settings** with the bootstrap administrator to complete `/setup`. The wizard saves household defaults and reports which provider variables the isolated integration container can see.
 
 Caddy routes `/api/*` and `/socket.io/*` to `game-api`, `/cast/receiver*` to the static receiver, and all other paths to `web`. The alias uses a 308 redirect to `https://bracket.famflix.live{uri}`, which preserves path and query string.
 

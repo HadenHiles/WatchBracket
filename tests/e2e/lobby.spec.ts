@@ -1,5 +1,7 @@
 import { expect, test, type BrowserContext } from "@playwright/test";
 
+const captureDocs = process.env.CAPTURE_DOCS === "1";
+
 async function join(context: BrowserContext, code: string, nickname: string) {
   const page = await context.newPage();
   await page.goto(`/join/${code}`);
@@ -21,6 +23,7 @@ test("host, guests, and an independent revocable display share a durable lobby",
   const host = await hostContext.newPage();
   await host.goto("/");
   await expect(host.getByText("No account required.")).toBeVisible();
+  if (captureDocs) await host.screenshot({ path: "docs/assets/demo-home.png", fullPage: true });
   await host.getByRole("button", { name: "Create a Room" }).click();
   await expect(host).toHaveURL(/\/room\//, { timeout: 15_000 });
   await expect(host.getByRole("status")).toContainText("connected");
@@ -32,6 +35,7 @@ test("host, guests, and an independent revocable display share a durable lobby",
   const guestC = await join(guestCContext, code, "Browser C");
   await expect(host.getByText("Browser B")).toBeVisible();
   await expect(host.getByText("Browser C")).toBeVisible();
+  if (captureDocs) await host.screenshot({ path: "docs/assets/demo-lobby.png", fullPage: true });
   await guestB.reload();
   await expect(host.getByText("Browser B")).toHaveCount(1);
 
@@ -43,6 +47,7 @@ test("host, guests, and an independent revocable display share a durable lobby",
   await display.getByRole("button", { name: "Connect display" }).click();
   await expect(display.getByText("Browser B")).toBeVisible();
   await expect(display.getByText("Browser C")).toBeVisible();
+  if (captureDocs) await display.screenshot({ path: "docs/assets/demo-display.png", fullPage: true });
 
   await host.goto("about:blank");
   await guestC.reload();

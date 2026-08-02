@@ -1,0 +1,4 @@
+# Production is the default Compose application. First-time setup only needs
+# private environment files and the external edge network described in README.
+include:
+  - path: compose.prod.yml

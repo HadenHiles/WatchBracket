@@ -2,11 +2,44 @@
 
 Watch Bracket is a self-hosted, real-time party game for turning “what should we watch?” into a shared decision. V1 implements Milestones 0 through 9: NAS deployment and onboarding, durable realtime rooms, browser and Chromecast displays, private nominations, the complete Double-Take tournament, TMDB/Plex/Tautulli/Seerr-compatible integrations, winner actions, household memory, replay, animated presentation, accessibility, and production hardening.
 
-![Watch Bracket winner presentation](docs/assets/demo-winner.png)
+## See it in action
+
+| Start a movie night | Watch the room fill live |
+| --- | --- |
+| ![Watch Bracket home screen](docs/assets/demo-home.png) | ![Watch Bracket room lobby](docs/assets/demo-lobby.png) |
+
+| Pair the television display | Crown a winner |
+| --- | --- |
+| ![Watch Bracket shared display](docs/assets/demo-display.png) | ![Watch Bracket winner presentation](docs/assets/demo-winner.png) |
+
+## Docker NAS quick start
+
+Install Docker Engine with Docker Compose, then:
+
+```sh
+git clone https://github.com/HadenHiles/WatchBracket.git
+cd WatchBracket
+cp .env.example .env
+cp .env.integration.example .env.integration.production
+docker network create watchbracket_edge
+```
+
+Edit the two private environment files and replace every `replace-me` value. Set `PUBLIC_APP_URL`, `PUBLIC_ALIAS_URL`, the administrator email, and any media-server credentials for your installation. Both files are ignored by Git.
+
+Start everything—including PostgreSQL migrations—with:
+
+```sh
+docker compose up -d --build
+docker compose ps
+```
+
+Connect your existing reverse proxy or Cloudflare Tunnel to `watchbracket_edge`, open `PUBLIC_APP_URL`, and use **Server settings** to complete the guided setup. Creating and joining rooms does not require an account.
+
+After the one-time environment and reverse-proxy setup, routine restarts are simply `docker compose up -d`. Source upgrades should use `git pull --ff-only` followed by `docker compose up -d --build`.
 
 TMDB search and wildcard generation run exclusively through the private integration service. Development and test environments retain the deterministic local catalog as an explicit offline fallback; production never silently fills a bracket with fallback titles that bypass room filters. Google Cast launching requires a registered Custom Web Receiver application ID and a registered physical test device; see `docs/cast/MILESTONE-2.md`.
 
-## Local prerequisites
+## Development prerequisites
 
 - Node.js 22.9 or newer
 - pnpm 10.34 or newer (pnpm 11 requires Node.js 22.13+)
@@ -14,7 +47,7 @@ TMDB search and wildcard generation run exclusively through the private integrat
 
 Copy `.env.example` to a private environment file only when running services outside Compose. Never commit the resulting file.
 
-## Start locally
+## Start for development
 
 The one-command container path includes PostgreSQL migrations:
 

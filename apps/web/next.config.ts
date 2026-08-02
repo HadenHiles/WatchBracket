@@ -5,14 +5,17 @@ const parsedEnv = z
   .object({
     GAME_API_INTERNAL_URL: z.url().default("http://127.0.0.1:3001"),
     PUBLIC_APP_URL: z.url().default("http://localhost:3000"),
+    PUBLIC_ALIAS_URL: z.url().default("http://vote.localhost:3000"),
   })
   .safeParse(process.env);
 if (!parsedEnv.success)
   throw new Error(
-    "Invalid web environment configuration. Check: GAME_API_INTERNAL_URL, PUBLIC_APP_URL",
+    "Invalid web environment configuration. Check: GAME_API_INTERNAL_URL, PUBLIC_APP_URL, PUBLIC_ALIAS_URL",
   );
 const api = parsedEnv.data.GAME_API_INTERNAL_URL;
-const usesHttps = new URL(parsedEnv.data.PUBLIC_APP_URL).protocol === "https:";
+const publicAppUrl = new URL(parsedEnv.data.PUBLIC_APP_URL);
+const publicAliasUrl = new URL(parsedEnv.data.PUBLIC_ALIAS_URL);
+const usesHttps = publicAppUrl.protocol === "https:";
 const castReceiverAppId = process.env.CAST_RECEIVER_APP_ID?.trim() ?? "";
 const contentSecurityPolicy = [
   "default-src 'self'",
@@ -39,6 +42,16 @@ const config: NextConfig = {
       { source: "/api/:path*", destination: `${api}/api/:path*` },
       { source: "/socket.io/", destination: `${api}/socket.io/` },
       { source: "/socket.io/:path*", destination: `${api}/socket.io/:path*` },
+    ];
+  },
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: publicAliasUrl.hostname }],
+        destination: `${publicAppUrl.origin}/:path*`,
+        permanent: true,
+      },
     ];
   },
   async headers() {

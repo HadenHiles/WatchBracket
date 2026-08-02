@@ -112,3 +112,5 @@ jobs:
       - run: cp .env.example .env.production
       - run: cp .env.integration.example .env.integration.production
       - run: docker compose --env-file .env.production -f compose.prod.yml config --quiet
+      - run: cp .env.production .env
+      - run: docker compose config --quiet

@@ -162,10 +162,13 @@ export async function buildApp(env: GameApiEnv) {
   });
   app.decorate("db", database.db);
   await app.register(cookie);
-  await app.register(helmet, { contentSecurityPolicy: false });
+  await app.register(helmet, {
+    contentSecurityPolicy: { directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] } },
+    crossOriginResourcePolicy: { policy: "same-site" },
+  });
   await app.register(rateLimit, {
-    global: false,
-    max: 60,
+    global: true,
+    max: 120,
     timeWindow: "1 minute",
   });
   let realtime: RealtimeRuntime;

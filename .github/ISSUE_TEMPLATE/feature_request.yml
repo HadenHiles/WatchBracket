@@ -1,0 +1,13 @@
+name: Feature request
+description: Propose an improvement that fits the self-hosted product
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    attributes: { label: Problem, description: What movie-night problem should this solve? }
+    validations: { required: true }
+  - type: textarea
+    attributes: { label: Proposed experience }
+    validations: { required: true }
+  - type: textarea
+    attributes: { label: Privacy and self-hosting impact }

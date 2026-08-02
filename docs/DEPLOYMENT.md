@@ -39,4 +39,4 @@ Bootstrap values are consulted only when `admin_users` is empty. Changing `ADMIN
 
 ## Backups
 
-Back up the named PostgreSQL volume using `pg_dump` on a schedule and test restore into a fresh database. Also back up non-secret Compose/Caddy configuration. Keep `.env.production` in a separate encrypted secret backup. Restore the database before starting `game-api`, then run migrations once.
+Back up the named PostgreSQL volume using `scripts/backup.sh` on a schedule and test every archive with `scripts/verify-restore.sh`. Also back up non-secret Compose/Caddy configuration. Keep `.env.production` in a separate encrypted secret backup. Follow `docs/BACKUP-RESTORE.md` and `docs/UPGRADES.md`; restore into a clean database before starting `game-api`, then run migrations once.

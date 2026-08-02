@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RoomDisplay } from "@watch-bracket/display-ui";
 import type { DisplayScene } from "@watch-bracket/display-protocol";
 import { BrandLogo } from "../../../components/brand-logo";
@@ -110,9 +110,16 @@ function fixture(mode: string): DisplayScene {
 }
 export default function TestMode() {
   const [preset, setPreset] = useState<"720p" | "1080p">("1080p");
-  const [mode, setMode] = useState("lobby");
+  const [mode, setMode] = useState(process.env.NEXT_PUBLIC_PRESENTATION_SCENE ?? "lobby");
   const [reduced, setReduced] = useState(false);
   const [state, setState] = useState<"connected" | "reconnecting">("connected");
+  const [demo, setDemo] = useState(process.env.NEXT_PUBLIC_PRESENTATION_DEMO === "1");
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const requested = query.get("scene");
+    if (["lobby", "nominations", "intro", "voting", "result", "winner"].includes(requested ?? "")) setMode(requested!);
+    setDemo(query.get("demo") === "1");
+  }, []);
   const width = preset === "720p" ? 1280 : 1920;
   if (
     process.env.NODE_ENV === "production" &&
@@ -134,7 +141,7 @@ export default function TestMode() {
         fontFamily: "system-ui",
       }}
     >
-      <aside className="card actions" style={{ marginBottom: 16 }}>
+      {!demo && <aside className="card actions" style={{ marginBottom: 16 }}>
         <label>
           Viewport
           <select
@@ -179,7 +186,7 @@ export default function TestMode() {
         >
           {state}
         </button>
-      </aside>
+      </aside>}
       <div
         style={{
           width: "100%",

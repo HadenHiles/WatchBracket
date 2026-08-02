@@ -34,4 +34,17 @@ describe('private media integrations', () => {
     const result = await new SeerrProvider('http://seerr.local', 'secret-key', fetcher as typeof fetch).request({ tmdbId: 1399, mediaType: 'TV', tvSeasonPolicy: 'FIRST' });
     expect(result).toEqual({ requestId: 42, status: 'PENDING' });
   });
+
+  it('resolves the latest TV season before creating a Seerr request', async () => {
+    const fetcher = vi.fn((url: URL | RequestInfo, init?: RequestInit) => {
+      if (new URL(String(url)).pathname === '/api/v1/tv/1399') {
+        return json({ seasons: [{ seasonNumber: 0 }, { seasonNumber: 1 }, { seasonNumber: 4 }] });
+      }
+      expect(JSON.parse(String(init?.body))).toEqual({ mediaType: 'tv', mediaId: 1399, seasons: [4] });
+      return json({ id: 43, media: { status: 2 } });
+    });
+    const result = await new SeerrProvider('http://seerr.local', 'secret-key', fetcher as typeof fetch).request({ tmdbId: 1399, mediaType: 'TV', tvSeasonPolicy: 'LATEST' });
+    expect(result).toEqual({ requestId: 43, status: 'PENDING' });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
 });

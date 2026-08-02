@@ -3,7 +3,13 @@
   "private": true,
   "packageManager": "pnpm@10.34.5",
   "engines": { "node": ">=22.9.0" },
-  "pnpm": { "onlyBuiltDependencies": ["esbuild", "sharp", "@node-rs/argon2"] },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "sharp", "@node-rs/argon2"],
+    "overrides": {
+      "postcss": "8.5.25",
+      "sharp": "0.35.3"
+    }
+  },
   "scripts": {
     "dev": "pnpm --parallel --filter @watch-bracket/game-api --filter @watch-bracket/integration-service --filter @watch-bracket/web --filter @watch-bracket/cast-receiver dev",
     "build": "pnpm -r --if-present build",

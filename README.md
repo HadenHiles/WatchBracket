@@ -1,6 +1,8 @@
 # Watch Bracket
 
-Watch Bracket is a self-hosted, real-time party game for turning “what should we watch?” into a shared decision. This repository currently implements Milestones 0 through 5: NAS-oriented deployment, first-run household setup, durable rooms, browser and Chromecast displays, private ranked nominations, the complete server-authoritative Double-Take tournament, and TMDB-backed metadata, availability, and explainable recommendations.
+Watch Bracket is a self-hosted, real-time party game for turning “what should we watch?” into a shared decision. V1 implements Milestones 0 through 9: NAS deployment and onboarding, durable realtime rooms, browser and Chromecast displays, private nominations, the complete Double-Take tournament, TMDB/Plex/Tautulli/Seerr-compatible integrations, winner actions, household memory, replay, animated presentation, accessibility, and production hardening.
+
+![Watch Bracket winner presentation](docs/assets/demo-winner.png)
 
 TMDB search and wildcard generation run exclusively through the private integration service. Development and test environments retain the deterministic local catalog as an explicit offline fallback; production never silently fills a bracket with fallback titles that bypass room filters. Google Cast launching requires a registered Custom Web Receiver application ID and a registered physical test device; see `docs/cast/MILESTONE-2.md`.
 
@@ -59,6 +61,6 @@ Browsers access one public origin through Caddy. Only the game API reaches Postg
 
 The Cast sender passes only a single-use launch token over the custom namespace. The receiver exchanges it once and then connects directly to the game API using an in-memory display bearer token. Set `CAST_RECEIVER_APP_ID` at web build time after completing Google Cast registration.
 
-See the [NAS quick start](docs/NAS-QUICKSTART.md), [deployment guide](docs/DEPLOYMENT.md), [security model](docs/SECURITY.md), and complete [product specification](docs/SPEC.md).
+See the [NAS quick start](docs/NAS-QUICKSTART.md), [deployment guide](docs/DEPLOYMENT.md), [backup/restore runbook](docs/BACKUP-RESTORE.md), [security model](docs/SECURITY.md), [roadmap](docs/ROADMAP.md), and complete [product specification](docs/SPEC.md).
 
-Implementation notes are tracked per phase in [Milestone 6](docs/MILESTONE-6.md) and [Milestone 7](docs/MILESTONE-7.md).
+Implementation notes are tracked per phase in [Milestone 6](docs/MILESTONE-6.md), [Milestone 7](docs/MILESTONE-7.md), [Milestone 8](docs/MILESTONE-8.md), and [Milestone 9](docs/MILESTONE-9.md).

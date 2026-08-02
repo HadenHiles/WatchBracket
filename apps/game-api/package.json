@@ -12,6 +12,7 @@
     "@watch-bracket/config": "workspace:*",
     "@watch-bracket/db": "workspace:*",
     "@watch-bracket/display-protocol": "workspace:*",
+    "@watch-bracket/mock-catalog": "workspace:*",
     "@watch-bracket/realtime-protocol": "workspace:*",
     "@watch-bracket/shared": "workspace:*",
     "drizzle-orm": "0.45.2",

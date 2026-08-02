@@ -6,6 +6,7 @@ COPY apps/game-api/package.json apps/game-api/package.json
 COPY packages/config/package.json packages/config/package.json
 COPY packages/db/package.json packages/db/package.json
 COPY packages/display-protocol/package.json packages/display-protocol/package.json
+COPY packages/mock-catalog/package.json packages/mock-catalog/package.json
 COPY packages/realtime-protocol/package.json packages/realtime-protocol/package.json
 COPY packages/shared/package.json packages/shared/package.json
 RUN pnpm install --frozen-lockfile

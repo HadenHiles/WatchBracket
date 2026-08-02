@@ -15,7 +15,7 @@ if (!databaseUrl) {
   });
 }
 
-suite('Milestone 1 API against PostgreSQL', () => {
+suite('Milestones 1 through 3 API against PostgreSQL', () => {
   const env: GameApiEnv = {
     NODE_ENV: 'test', DATABASE_URL: databaseUrl!, PUBLIC_APP_URL: 'http://localhost:3000', PUBLIC_ALIAS_URL: 'http://vote.localhost:3000', PORT: 3001,
     ADMIN_BOOTSTRAP_EMAIL: 'host@example.com', ADMIN_BOOTSTRAP_PASSWORD: 'correct-horse-battery-staple',
@@ -30,7 +30,7 @@ suite('Milestone 1 API against PostgreSQL', () => {
   const cookieHeader = (cookies: Record<string,string>) => Object.entries(cookies).map(([name,value]) => `${name}=${value}`).join('; ');
 
   beforeAll(async () => {
-    await inspector.client.unsafe('TRUNCATE TABLE audit_events, idempotency_keys, cast_launch_tokens, display_sessions, display_pairing_codes, participants, rooms, admin_sessions, admin_users, households RESTART IDENTITY CASCADE');
+    await inspector.client.unsafe('TRUNCATE TABLE audit_events, idempotency_keys, cast_launch_tokens, display_sessions, display_pairing_codes, submissions, media_items, participants, rooms, admin_sessions, admin_users, households RESTART IDENTITY CASCADE');
     app = await buildApp(env); await app.ready();
   });
   afterAll(async () => { await app?.close(); await inspector.client.end(); });
@@ -51,6 +51,11 @@ suite('Milestone 1 API against PostgreSQL', () => {
     const authCookies: Record<string,string> = { wb_host: hostCookie, wb_csrf: csrf };
     const mutationHeaders = { ...origin, cookie: cookieHeader(authCookies), 'x-csrf-token': csrf };
 
+    expect((await app.inject({ method: 'GET', url: '/api/setup/status' })).json()).toEqual({ required: true });
+    const setup = await app.inject({ method: 'PATCH', url: '/api/admin/setup', headers: mutationHeaders, payload: { name: 'Test Household', region: 'CA', timeZone: 'America/Toronto', defaultRules: { preset: 'QUICK_PICK', nominationDurationSeconds: 60, nominationSlots: 2, revealMode: 'AFTER_DEADLINE' }, completed: true } });
+    expect(setup.statusCode).toBe(200); expect(setup.json()).toMatchObject({ name: 'Test Household', completed: true });
+    expect((await app.inject({ method: 'GET', url: '/api/setup/status' })).json()).toEqual({ required: false });
+
     const create = await app.inject({ method: 'POST', url: '/api/rooms', headers: { ...mutationHeaders, 'idempotency-key': 'room-create-test-0001' }, payload: { name: 'Integration Night', hostNickname: 'Haden' } });
     expect(create.statusCode).toBe(201);
     const created = create.json();
@@ -60,6 +65,7 @@ suite('Milestone 1 API against PostgreSQL', () => {
     expect(people).toHaveLength(1);
     expect(people[0]).toMatchObject({ role: 'HOST', displayNickname: 'Haden' });
     expect(room!.hostParticipantId).toBe(people[0]!.id);
+    expect(room!.rules).toMatchObject({ preset: 'QUICK_PICK', nominationDurationSeconds: 60 });
 
     const replay = await app.inject({ method: 'POST', url: '/api/rooms', headers: { ...mutationHeaders, cookie: cookieHeader({ ...authCookies, wb_participant: participantCookie }), 'idempotency-key': 'room-create-test-0001' }, payload: { name: 'Integration Night', hostNickname: 'Haden' } });
     expect(replay.statusCode).toBe(200); expect(replay.json()).toMatchObject({ roomId: created.roomId, replayed: true });
@@ -107,6 +113,31 @@ suite('Milestone 1 API against PostgreSQL', () => {
     const castSnapshot = await app.inject({ method: 'GET', url: `/api/displays/${castSession.displaySessionId}/snapshot`, headers: { authorization: `Bearer ${castSession.displayToken}` } });
     expect(castSnapshot.statusCode).toBe(200); expect(castSnapshot.json()).toMatchObject({ roomId: created.roomId, viewer: 'DISPLAY' });
     expect((await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/lock`, headers: { ...origin, authorization: `Bearer ${castSession.displayToken}` }, payload: {} })).statusCode).toBe(403);
+
+    const catalog = await app.inject({ method: 'GET', url: '/api/catalog/search?q=science%20fiction', headers: { cookie: `wb_participant=${participantCookie}` } });
+    expect(catalog.statusCode).toBe(200); expect(catalog.json().items).toHaveLength(4);
+    const [firstTitle, secondTitle] = catalog.json().items;
+    const rules = { preset: 'QUICK_PICK', nominationDurationSeconds: 30, nominationSlots: 2, revealMode: 'AFTER_DEADLINE' };
+    expect((await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/nominations/start`, headers: hostHeaders, payload: { rules } })).statusCode).toBe(200);
+    const guestHeaders = { ...origin, cookie: cookieHeader({ wb_participant: guestParticipant, wb_csrf: guestCsrf }), 'x-csrf-token': guestCsrf };
+    for (const [headers, rank, catalogKey] of [[hostHeaders, 1, firstTitle.catalogKey], [hostHeaders, 2, secondTitle.catalogKey], [guestHeaders, 1, firstTitle.catalogKey], [guestHeaders, 2, secondTitle.catalogKey]] as const) {
+      expect((await app.inject({ method: 'PUT', url: `/api/rooms/${created.roomId}/submissions/${rank}`, headers, payload: { catalogKey } })).statusCode).toBe(200);
+    }
+    expect((await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/submissions/lock`, headers: hostHeaders, payload: {} })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/submissions/lock`, headers: guestHeaders, payload: {} })).statusCode).toBe(200);
+    const privateHostSnapshot = await app.inject({ method: 'GET', url: `/api/rooms/${created.roomId}/snapshot`, headers: { cookie: hostRoomCookies } });
+    expect(privateHostSnapshot.json()).toMatchObject({ state: 'NOMINATING', nominationsRevealed: false, nominationProgress: { submittedParticipants: 2, lockedParticipants: 2 }, candidates: [] });
+    expect(privateHostSnapshot.json().ownSubmissions).toHaveLength(2);
+    const privateDisplaySnapshot = await app.inject({ method: 'GET', url: `/api/displays/${castSession.displaySessionId}/snapshot`, headers: { authorization: `Bearer ${castSession.displayToken}` } });
+    expect(privateDisplaySnapshot.json()).toMatchObject({ state: 'NOMINATING', ownSubmissions: [], candidates: [] });
+    await inspector.db.update(rooms).set({ nominationDeadline: new Date(0) }).where(eq(rooms.id, created.roomId));
+    const stopNominationScheduler = startExpirationScheduler(inspector.db, () => undefined, 10);
+    await new Promise((resolve) => setTimeout(resolve, 80)); stopNominationScheduler();
+    const revealed = await app.inject({ method: 'GET', url: `/api/rooms/${created.roomId}/snapshot`, headers: { cookie: hostRoomCookies } });
+    expect(revealed.json()).toMatchObject({ state: 'NOMINATIONS_LOCKED', nominationsRevealed: true });
+    expect(revealed.json().candidates).toEqual(expect.arrayContaining([expect.objectContaining({ catalogKey: firstTitle.catalogKey, supportCount: 2 }), expect.objectContaining({ catalogKey: secondTitle.catalogKey, supportCount: 2 })]));
+    const restoredInProgress = await app.inject({ method: 'POST', url: '/api/rooms/join', headers: { ...origin, cookie: `wb_participant=${guestParticipant}` }, payload: { roomCode: created.code, nickname: 'Maya' } });
+    expect(restoredInProgress.json()).toMatchObject({ restored: true });
     expect((await app.inject({ method: 'DELETE', url: `/api/displays/${castSession.displaySessionId}`, headers: hostHeaders })).json()).toMatchObject({ revoked: true });
 
     const revokedIssuerLaunch = await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/cast-launch-tokens`, headers: hostHeaders, payload: {} });

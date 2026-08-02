@@ -34,7 +34,7 @@ services:
     <<: *hardened
     image: ghcr.io/example/watch-bracket-integration-service:local
     build: { context: ., dockerfile: infra/docker/integration-service.Dockerfile }
-    env_file: [{ path: .env.integration.production, required: false }]
+    env_file: [{ path: .env.integration.production, required: true }]
     networks: [data, integrations]
     depends_on: { migrate: { condition: service_completed_successfully } }
     healthcheck: { test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3002/internal/health/ready"], interval: 15s, timeout: 3s, retries: 10 }

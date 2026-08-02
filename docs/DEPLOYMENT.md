@@ -7,8 +7,9 @@ Watch Bracket is designed to join an existing Caddy and cloudflared stack. It do
 1. Create the external network once: `docker network create watchbracket_edge`.
 2. Attach the existing Caddy container to `watchbracket_edge`.
 3. Add `infra/caddy/Caddyfile.example` to the existing Caddy configuration and reload Caddy.
-4. Copy `.env.example` to `.env.production`, replace every fake secret, and restrict the file to the deployment administrator. When provider work begins, copy `.env.integration.example` to `.env.integration.production`; only the integration-service container reads that file.
+4. Copy `.env.example` to `.env.production` and `.env.integration.example` to `.env.integration.production`. Replace the database and shared-secret values in both files, keep the provider values fake or omit them until needed, and restrict both files to the deployment administrator. Only the integration-service container reads the integration file.
 5. Validate with `docker compose --env-file .env.production -f compose.prod.yml config` and start with `docker compose --env-file .env.production -f compose.prod.yml up -d --build`.
+6. Open the public app, sign in with the bootstrap administrator, and complete `/setup`. The wizard saves household defaults and reports which provider variables the isolated integration container can see.
 
 Caddy routes `/api/*` and `/socket.io/*` to `game-api`, `/cast/receiver*` to the static receiver, and all other paths to `web`. The alias uses a 308 redirect to `https://bracket.famflix.live{uri}`, which preserves path and query string.
 
@@ -31,6 +32,8 @@ Production Compose publishes no service ports. The integration service has no Ca
 ## Secrets and account rotation
 
 Use root-owned `.env.production` and `.env.integration.production` files or an equivalent secret injection mechanism. The internal shared secret must match in both files. Provider secrets, when added later, belong only in the latter integration-service environment. Session peppers and the bootstrap password belong only in the game API environment.
+
+The onboarding wizard deliberately does not write Docker environment files: a read-only, non-root container cannot safely rewrite its own deployment configuration. Add provider keys to `.env.integration.production`, restart only `integration-service`, and revisit **Setup & integrations** to refresh the secret-safe configured/not-configured indicators.
 
 Bootstrap values are consulted only when `admin_users` is empty. Changing `ADMIN_BOOTSTRAP_PASSWORD` does not overwrite an existing password. To rotate safely, use an audited database maintenance procedure during downtime: generate a new Argon2id hash with the application library, update the intended `admin_users.password_hash`, revoke all rows in `admin_sessions`, then restart. To re-bootstrap a lost private installation, back up PostgreSQL first, explicitly remove the intended admin and sessions, and restart with new bootstrap values; do not drop the household or rooms casually.
 

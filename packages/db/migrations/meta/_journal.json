@@ -22,6 +22,13 @@
       "when": 1785686275196,
       "tag": "0002_lucky_junta",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1785688083566,
+      "tag": "0003_tiny_human_cannonball",
+      "breakpoints": true
     }
   ]
 }

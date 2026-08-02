@@ -7,7 +7,7 @@ import { DisplaySubscribeSchema, ParticipantHeartbeatSchema, RoomSubscribeSchema
 import { bumpRoomVersion } from './domain.js';
 import type { GameApiEnv } from './env.js';
 import { allowedOrigin, COOKIE } from './security.js';
-import { getSnapshot, toLobbyScene, type Presence } from './snapshots.js';
+import { getSnapshot, toDisplayScene, type Presence } from './snapshots.js';
 import { hashToken } from '@watch-bracket/shared';
 import { z } from 'zod';
 
@@ -65,7 +65,7 @@ export function createRealtime(app: FastifyInstance, env: GameApiEnv) {
     for (const socket of sockets) {
       const actor = socket.data.actor;
       if (actor?.kind !== 'PARTICIPANT') continue;
-      const snapshot = await getSnapshot(app.db, roomId, actor.role, presence);
+      const snapshot = await getSnapshot(app.db, roomId, actor.role, presence, actor.id);
       socket.emit(eventName, envelope(roomId, snapshot.sequence, snapshot));
     }
   }
@@ -76,7 +76,7 @@ export function createRealtime(app: FastifyInstance, env: GameApiEnv) {
       if (actor?.kind !== 'DISPLAY') continue;
       const snapshot = await getSnapshot(app.db, roomId, 'DISPLAY', presence);
       if (eventName === 'display:snapshot' || snapshot.state === 'EXPIRED') socket.emit('display:snapshot', envelope(roomId, snapshot.sequence, snapshot));
-      else socket.emit(eventName, sceneEnvelope(roomId, snapshot.sequence, toLobbyScene(snapshot, env.PUBLIC_APP_URL)));
+      else socket.emit(eventName, sceneEnvelope(roomId, snapshot.sequence, toDisplayScene(snapshot, env.PUBLIC_APP_URL)));
     }
   }
   async function broadcastRoom(roomId: string, controllerEvent = 'room:snapshot') {

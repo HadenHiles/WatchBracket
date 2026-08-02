@@ -1,11 +1,12 @@
 import { sql } from 'drizzle-orm';
-import { bigint, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { bigint, boolean, check, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
 
 export const adminRole = pgEnum('admin_role', ['ADMIN']);
-export const roomState = pgEnum('room_state', ['LOBBY', 'EXPIRED']);
+export const roomState = pgEnum('room_state', ['LOBBY', 'NOMINATING', 'NOMINATIONS_LOCKED', 'EXPIRED']);
 export const participantRole = pgEnum('participant_role', ['HOST', 'PARTICIPANT', 'CO_HOST', 'SPECTATOR']);
 export const displayKind = pgEnum('display_kind', ['BROWSER', 'CAST']);
 export const actorType = pgEnum('actor_type', ['ADMIN', 'PARTICIPANT', 'DISPLAY', 'SYSTEM']);
+export const mediaType = pgEnum('media_type', ['MOVIE', 'TV']);
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -26,6 +27,8 @@ export const households = pgTable('households', {
   name: text('name').notNull(),
   region: text('region').notNull().default('CA'),
   timeZone: text('time_zone').notNull().default('America/Toronto'),
+  defaultRules: jsonb('default_rules_json').notNull().default({ preset: 'MOVIE_NIGHT', nominationDurationSeconds: 120, nominationSlots: 2, revealMode: 'AFTER_DEADLINE' }),
+  onboardingCompletedAt: timestamp('onboarding_completed_at', { withTimezone: true }),
   ...timestamps
 });
 
@@ -45,12 +48,16 @@ export const rooms = pgTable('rooms', {
   code: text('code').notNull(),
   name: text('name').notNull(),
   state: roomState('state').notNull().default('LOBBY'),
+  rules: jsonb('rules_json').notNull().default({ preset: 'MOVIE_NIGHT', nominationDurationSeconds: 120, nominationSlots: 2, revealMode: 'AFTER_DEADLINE' }),
+  randomSeed: text('random_seed').notNull().default('watch-bracket'),
   hostParticipantId: uuid('host_participant_id').references((): AnyPgColumn => participants.id),
   lockedAt: timestamp('locked_at', { withTimezone: true }),
+  nominationDeadline: timestamp('nomination_deadline', { withTimezone: true }),
+  nominationsRevealedAt: timestamp('nominations_revealed_at', { withTimezone: true }),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   version: bigint('version', { mode: 'number' }).notNull().default(0),
   ...timestamps
-}, (table) => [uniqueIndex('rooms_code_uq').on(table.code), index('rooms_expiration_idx').on(table.state, table.expiresAt)]);
+}, (table) => [uniqueIndex('rooms_code_uq').on(table.code), index('rooms_expiration_idx').on(table.state, table.expiresAt), index('rooms_nomination_deadline_idx').on(table.state, table.nominationDeadline)]);
 
 export const participants = pgTable('participants', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -61,6 +68,7 @@ export const participants = pgTable('participants', {
   tokenHash: text('session_token_hash').notNull(),
   joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  ready: boolean('ready').notNull().default(false),
   removedAt: timestamp('removed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, (table) => [
@@ -103,6 +111,37 @@ export const castLaunchTokens = pgTable('cast_launch_tokens', {
   receiverSessionId: uuid('receiver_session_id').references(() => displaySessions.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, (table) => [uniqueIndex('cast_launch_tokens_hash_uq').on(table.tokenHash), index('cast_launch_tokens_expiry_idx').on(table.roomId, table.expiresAt, table.consumedAt)]);
+
+export const mediaItems = pgTable('media_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  catalogKey: text('catalog_key').notNull(),
+  mediaType: mediaType('media_type').notNull(),
+  title: text('title').notNull(),
+  originalTitle: text('original_title').notNull(),
+  releaseYear: integer('release_year').notNull(),
+  runtimeMinutes: integer('runtime_minutes'),
+  contentRating: text('content_rating'),
+  genres: jsonb('genres_json').notNull().default([]),
+  synopsis: text('synopsis').notNull(),
+  posterUrl: text('poster_url'),
+  metadata: jsonb('metadata_json').notNull().default({ source: 'MOCK' }),
+  ...timestamps
+}, (table) => [uniqueIndex('media_items_catalog_key_uq').on(table.catalogKey), index('media_items_title_idx').on(table.title)]);
+
+export const submissions = pgTable('submissions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  roomId: uuid('room_id').notNull().references(() => rooms.id, { onDelete: 'cascade' }),
+  participantId: uuid('participant_id').notNull().references(() => participants.id, { onDelete: 'cascade' }),
+  mediaItemId: uuid('media_item_id').notNull().references(() => mediaItems.id),
+  rank: integer('rank').notNull(),
+  lockedAt: timestamp('locked_at', { withTimezone: true }),
+  ...timestamps
+}, (table) => [
+  uniqueIndex('submissions_room_participant_rank_uq').on(table.roomId, table.participantId, table.rank),
+  uniqueIndex('submissions_room_participant_media_uq').on(table.roomId, table.participantId, table.mediaItemId),
+  index('submissions_room_idx').on(table.roomId),
+  check('submissions_rank_check', sql`${table.rank} between 1 and 2`)
+]);
 
 export const idempotencyKeys = pgTable('idempotency_keys', {
   id: uuid('id').primaryKey().defaultRandom(),

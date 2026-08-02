@@ -23,6 +23,8 @@ All environment, HTTP, internal-provider, and realtime inputs use Zod schemas. R
 
 The integration boundary has no generic proxy or user-controlled URL operation. Future provider base URLs are deployment configuration, never guest input.
 
+The first-run wizard persists only non-secret household defaults. Its integration readiness call crosses the authenticated internal boundary and returns configured booleans, never credential values. Provider secrets remain in the integration-service environment or mounted secret files and are redacted from service logs.
+
 The example Caddy configuration applies HSTS, nosniff, referrer, and permissions headers. The receiver gets a narrow CSP. Do not weaken it to admit arbitrary scripts, images, or connection destinations.
 
 For a future public release, security reports will be accepted through a private advisory channel documented in `SECURITY.md`; the private deployment currently has no public reporting address.

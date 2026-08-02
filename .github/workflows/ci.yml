@@ -103,4 +103,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: cp .env.example .env.production
+      - run: cp .env.integration.example .env.integration.production
       - run: docker compose --env-file .env.production -f compose.prod.yml config --quiet

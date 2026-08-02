@@ -77,7 +77,7 @@ export async function createRoom(ctx: DomainContext, adminId: string, body: { na
     const code = generateRoomCode(env.ROOM_CODE_LENGTH);
     try {
       const result = await db.transaction(async (tx) => {
-        const [room] = await tx.insert(rooms).values({ householdId: household.id, code, name: body.name.trim(), expiresAt: new Date(Date.now() + env.ROOM_TTL_HOURS * 3_600_000), version: 1 }).returning();
+        const [room] = await tx.insert(rooms).values({ householdId: household.id, code, name: body.name.trim(), rules: household.defaultRules, randomSeed: generateSessionToken(), expiresAt: new Date(Date.now() + env.ROOM_TTL_HOURS * 3_600_000), version: 1 }).returning();
         const [participant] = await tx.insert(participants).values({ roomId: room!.id, normalizedNickname: nickname.normalized, displayNickname: nickname.display, role: 'HOST', tokenHash: hashToken(token, env.PARTICIPANT_SESSION_PEPPER) }).returning();
         await tx.update(rooms).set({ hostParticipantId: participant!.id }).where(eq(rooms.id, room!.id));
         const responseBody = { roomId: room!.id };
@@ -96,13 +96,14 @@ export async function createRoom(ctx: DomainContext, adminId: string, body: { na
 
 export async function joinRoom(ctx: DomainContext, body: { roomCode: string; nickname: string }, existingToken?: string) {
   const { db, env } = ctx;
-  const [room] = await db.select().from(rooms).where(and(eq(rooms.code, body.roomCode.trim().toUpperCase()), eq(rooms.state, 'LOBBY'))).limit(1);
-  if (!room) throw new DomainError('ROOM_UNAVAILABLE', 'That room is unavailable.', 404);
+  const [room] = await db.select().from(rooms).where(eq(rooms.code, body.roomCode.trim().toUpperCase())).limit(1);
+  if (!room || room.state === 'EXPIRED') throw new DomainError('ROOM_UNAVAILABLE', 'That room is unavailable.', 404);
   const existing = await resolveParticipant(ctx, existingToken);
   if (existing?.roomId === room.id) {
     await db.update(participants).set({ lastSeenAt: new Date() }).where(eq(participants.id, existing.id));
     return { room, participant: existing, token: undefined, restored: true };
   }
+  if (room.state !== 'LOBBY') throw new DomainError('ROOM_IN_PROGRESS', 'This room is already in progress.', 409);
   if (room.lockedAt) throw new DomainError('ROOM_LOCKED', 'This room is locked.', 423);
   const count = await db.select({ count: sql<number>`count(*)::int` }).from(participants).where(and(eq(participants.roomId, room.id), isNull(participants.removedAt)));
   if ((count[0]?.count ?? 0) >= env.ROOM_MAX_PARTICIPANTS) throw new DomainError('ROOM_FULL', 'This room is full.', 409);

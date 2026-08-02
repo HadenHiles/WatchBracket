@@ -1,22 +1,31 @@
 import { sql } from 'drizzle-orm';
 import type { Database } from '@watch-bracket/db';
 
-export function startExpirationScheduler(db: Database, onExpired: (roomId: string) => void, intervalMs = 30_000) {
+export function startExpirationScheduler(db: Database, onTransition: (roomId: string) => void, intervalMs = 1_000) {
   let running = false;
   const poll = async () => {
     if (running) return;
     running = true;
     try {
-      const result = await db.execute<{ id: string }>(sql`
+      const nominations = await db.execute<{ id: string }>(sql`
         WITH due AS (
-          SELECT id FROM rooms WHERE state = 'LOBBY' AND expires_at <= now()
+          SELECT id FROM rooms WHERE state = 'NOMINATING' AND nomination_deadline <= now()
+          ORDER BY nomination_deadline FOR UPDATE SKIP LOCKED LIMIT 25
+        )
+        UPDATE rooms SET state = 'NOMINATIONS_LOCKED', nominations_revealed_at = now(), version = version + 1, updated_at = now()
+        FROM due WHERE rooms.id = due.id AND rooms.state = 'NOMINATING'
+        RETURNING rooms.id
+      `);
+      const expired = await db.execute<{ id: string }>(sql`
+        WITH due AS (
+          SELECT id FROM rooms WHERE state <> 'EXPIRED' AND expires_at <= now()
           ORDER BY expires_at FOR UPDATE SKIP LOCKED LIMIT 25
         )
         UPDATE rooms SET state = 'EXPIRED', version = version + 1, updated_at = now()
-        FROM due WHERE rooms.id = due.id AND rooms.state = 'LOBBY'
+        FROM due WHERE rooms.id = due.id AND rooms.state <> 'EXPIRED'
         RETURNING rooms.id
       `);
-      for (const row of result) onExpired(row.id);
+      for (const row of [...nominations, ...expired]) onTransition(row.id);
     } finally { running = false; }
   };
   void poll();
@@ -24,4 +33,3 @@ export function startExpirationScheduler(db: Database, onExpired: (roomId: strin
   timer.unref();
   return () => clearInterval(timer);
 }
-

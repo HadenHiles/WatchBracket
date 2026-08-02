@@ -5,6 +5,7 @@ import { eq, sql } from 'drizzle-orm';
 import Fastify, { type FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { createDatabase, participants, rooms } from '@watch-bracket/db';
+import { HouseRulesSchema } from '@watch-bracket/realtime-protocol';
 import { apiError, generateSessionToken, hashToken } from '@watch-bracket/shared';
 import { bootstrapAdmin, createCastLaunchToken, createDisplayPairingCode, createRoom, DomainError, exchangeCastLaunchToken, joinRoom, login, logout, pairDisplay, resolveAdmin, resolveDisplay, resolveParticipant, revokeDisplay, setRoomLock } from './domain.js';
 import type { GameApiEnv } from './env.js';
@@ -12,14 +13,22 @@ import { createRealtime, type RealtimeRuntime } from './realtime.js';
 import { COOKIE, allowedOrigin, cookieOptions, issueCsrf, verifyCsrf } from './security.js';
 import { getSnapshot } from './snapshots.js';
 import { startExpirationScheduler } from './scheduler.js';
+import { closeNominations, extendNominations, searchCatalog, seedMockCatalog, setNominationsReady, startNominations, submitNomination } from './nominations.js';
+import { getHouseholdSetup, saveHouseholdSetup } from './setup.js';
 
 const LoginSchema = z.object({ email: z.email(), password: z.string().min(1).max(256) });
 const CreateRoomSchema = z.object({ name: z.string().trim().min(1).max(80), hostNickname: z.string().min(1).max(64) });
 const JoinRoomSchema = z.object({ roomCode: z.string().min(4).max(10), nickname: z.string().min(1).max(64) });
 const PairDisplaySchema = z.object({ pairingCode: z.string().min(4).max(10), displayName: z.string().trim().min(1).max(64).default('Shared display') });
 const CastExchangeSchema = z.object({ launchToken: z.string().min(32).max(256), protocolVersion: z.literal(1) });
+const SetupSchema = z.object({ name: z.string().trim().min(1).max(80), region: z.string().trim().min(2).max(8), timeZone: z.string().trim().min(1).max(64), defaultRules: HouseRulesSchema, completed: z.boolean() });
+const CatalogQuerySchema = z.object({ q: z.string().max(100).default(''), mediaType: z.enum(['MOVIE', 'TV']).optional() });
+const StartNominationsSchema = z.object({ rules: HouseRulesSchema });
+const ExtendNominationsSchema = z.object({ seconds: z.number().int().min(30).max(300) });
+const SubmitNominationSchema = z.object({ catalogKey: z.string().min(1).max(128) });
 const ParamsRoomSchema = z.object({ roomId: z.uuid() });
 const ParamsDisplaySchema = z.object({ displaySessionId: z.uuid() });
+const ParamsSubmissionSchema = z.object({ roomId: z.uuid(), rank: z.coerce.number().int().min(1).max(2) });
 
 function parse<T>(schema: z.ZodType<T>, input: unknown): T {
   const result = schema.safeParse(input);
@@ -59,6 +68,7 @@ export async function buildApp(env: GameApiEnv) {
 
   app.get('/api/health/live', async () => ({ status: 'ok' }));
   app.get('/api/health/ready', async () => { await app.db.execute(sql`select 1`); return { status: 'ready' }; });
+  app.get('/api/setup/status', async () => { const setup = await getHouseholdSetup(context); return { required: !setup.completed }; });
 
   app.post('/api/auth/login', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
     await mutationGuard(request, false);
@@ -79,6 +89,26 @@ export async function buildApp(env: GameApiEnv) {
     if (!admin) return { authenticated: false };
     const csrfToken = issueCsrf(reply, env);
     return { authenticated: true, admin: { id: admin.adminId, email: admin.email }, csrfToken };
+  });
+  app.get('/api/admin/setup', async (request) => {
+    const admin = await resolveAdmin(context, request.cookies[COOKIE.host]);
+    if (!admin) throw new DomainError('AUTH_REQUIRED', 'Host sign-in is required.', 401);
+    return getHouseholdSetup(context);
+  });
+  app.patch('/api/admin/setup', async (request) => {
+    await mutationGuard(request);
+    const admin = await resolveAdmin(context, request.cookies[COOKIE.host]);
+    if (!admin) throw new DomainError('AUTH_REQUIRED', 'Host sign-in is required.', 401);
+    return saveHouseholdSetup(context, admin.adminId, parse(SetupSchema, request.body));
+  });
+  app.get('/api/admin/integrations/status', async (request) => {
+    const admin = await resolveAdmin(context, request.cookies[COOKIE.host]);
+    if (!admin) throw new DomainError('AUTH_REQUIRED', 'Host sign-in is required.', 401);
+    try {
+      const response = await fetch(new URL('/internal/setup/status', env.INTEGRATION_SERVICE_INTERNAL_URL), { headers: { 'x-integration-secret': env.INTEGRATION_SERVICE_SHARED_SECRET }, signal: AbortSignal.timeout(3000) });
+      if (!response.ok) throw new Error(`integration status ${response.status}`);
+      return await response.json();
+    } catch { return { unavailable: true, providers: {} }; }
   });
 
   app.post('/api/rooms', { config: { rateLimit: { max: 10, timeWindow: '1 hour' } } }, async (request, reply) => {
@@ -114,7 +144,7 @@ export async function buildApp(env: GameApiEnv) {
   app.get('/api/rooms/:roomId/snapshot', async (request) => {
     const { roomId } = parse(ParamsRoomSchema, request.params);
     const participant = await resolveParticipant(context, request.cookies[COOKIE.participant]);
-    if (participant?.roomId === roomId) return getSnapshot(app.db, roomId, participant.role === 'HOST' ? 'HOST' : 'PARTICIPANT', realtime.presence);
+    if (participant?.roomId === roomId) return getSnapshot(app.db, roomId, participant.role === 'HOST' ? 'HOST' : 'PARTICIPANT', realtime.presence, participant.id);
     const display = await resolveDisplay(context, request.cookies[COOKIE.display]);
     if (display?.roomId === roomId) return getSnapshot(app.db, roomId, 'DISPLAY', realtime.presence);
     throw new DomainError('ROOM_SESSION_REQUIRED', 'A room-scoped session is required.', 401);
@@ -130,6 +160,47 @@ export async function buildApp(env: GameApiEnv) {
     const participant = await resolveParticipant(context, request.cookies[COOKIE.participant]);
     if (!participant) throw new DomainError('HOST_REQUIRED', 'Room host authorization is required.', 403);
     const room = await setRoomLock(app.db, participant.id, roomId, false); await realtime.broadcastRoom(roomId, 'room:unlocked'); return { roomId, locked: false, sequence: room.version };
+  });
+  app.get('/api/catalog/search', async (request) => {
+    const participant = await resolveParticipant(context, request.cookies[COOKIE.participant]);
+    if (!participant) throw new DomainError('ROOM_SESSION_REQUIRED', 'Join a room before searching the catalog.', 401);
+    const query = parse(CatalogQuerySchema, request.query);
+    return { items: searchCatalog(query.q, query.mediaType) };
+  });
+  app.post('/api/rooms/:roomId/nominations/start', async (request) => {
+    await mutationGuard(request); const { roomId } = parse(ParamsRoomSchema, request.params);
+    const participant = await resolveParticipant(context, request.cookies[COOKIE.participant]);
+    if (!participant) throw new DomainError('HOST_REQUIRED', 'Room host authorization is required.', 403);
+    const { rules } = parse(StartNominationsSchema, request.body);
+    const result = await startNominations(context, participant.id, roomId, rules); await realtime.broadcastRoom(roomId, 'room:nominations-started');
+    return { state: result.room.state, deadline: result.deadline.toISOString() };
+  });
+  app.post('/api/rooms/:roomId/nominations/extend', async (request) => {
+    await mutationGuard(request); const { roomId } = parse(ParamsRoomSchema, request.params); const { seconds } = parse(ExtendNominationsSchema, request.body);
+    const participant = await resolveParticipant(context, request.cookies[COOKIE.participant]);
+    if (!participant) throw new DomainError('HOST_REQUIRED', 'Room host authorization is required.', 403);
+    const deadline = await extendNominations(context, participant.id, roomId, seconds); await realtime.broadcastRoom(roomId, 'room:nomination-progress'); return { deadline: deadline.toISOString() };
+  });
+  app.post('/api/rooms/:roomId/nominations/close', async (request) => {
+    await mutationGuard(request); const { roomId } = parse(ParamsRoomSchema, request.params); const participant = await resolveParticipant(context, request.cookies[COOKIE.participant]);
+    if (!participant) throw new DomainError('HOST_REQUIRED', 'Room host authorization is required.', 403);
+    await closeNominations(context, participant.id, roomId); await realtime.broadcastRoom(roomId, 'room:nominations-revealed'); return { state: 'NOMINATIONS_LOCKED' };
+  });
+  app.put('/api/rooms/:roomId/submissions/:rank', async (request) => {
+    await mutationGuard(request); const { roomId, rank } = parse(ParamsSubmissionSchema, request.params); const { catalogKey } = parse(SubmitNominationSchema, request.body);
+    const participant = await resolveParticipant(context, request.cookies[COOKIE.participant]);
+    if (!participant?.roomId || participant.roomId !== roomId) throw new DomainError('ROOM_SESSION_REQUIRED', 'A room-scoped session is required.', 401);
+    await submitNomination(context, participant.id, roomId, rank as 1 | 2, catalogKey); await realtime.broadcastRoom(roomId, 'room:nomination-progress'); return { saved: true, rank };
+  });
+  app.post('/api/rooms/:roomId/submissions/lock', async (request) => {
+    await mutationGuard(request); const { roomId } = parse(ParamsRoomSchema, request.params); const participant = await resolveParticipant(context, request.cookies[COOKIE.participant]);
+    if (!participant || participant.roomId !== roomId) throw new DomainError('ROOM_SESSION_REQUIRED', 'A room-scoped session is required.', 401);
+    await setNominationsReady(context, participant.id, roomId, true); await realtime.broadcastRoom(roomId, 'room:nomination-progress'); return { ready: true };
+  });
+  app.post('/api/rooms/:roomId/submissions/unlock', async (request) => {
+    await mutationGuard(request); const { roomId } = parse(ParamsRoomSchema, request.params); const participant = await resolveParticipant(context, request.cookies[COOKIE.participant]);
+    if (!participant || participant.roomId !== roomId) throw new DomainError('ROOM_SESSION_REQUIRED', 'A room-scoped session is required.', 401);
+    await setNominationsReady(context, participant.id, roomId, false); await realtime.broadcastRoom(roomId, 'room:nomination-progress'); return { ready: false };
   });
   app.post('/api/rooms/:roomId/display-pairing-codes', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request) => {
     await mutationGuard(request); const { roomId } = parse(ParamsRoomSchema, request.params);
@@ -177,6 +248,7 @@ export async function buildApp(env: GameApiEnv) {
   app.addHook('onReady', async () => {
     await app.db.execute(sql`select 1`);
     await bootstrapAdmin(context);
+    await seedMockCatalog(context);
     realtime = createRealtime(app, env);
     stopScheduler = startExpirationScheduler(app.db, (roomId) => void realtime.broadcastRoom(roomId));
   });

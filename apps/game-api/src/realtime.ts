@@ -6,7 +6,7 @@ import { displaySessions, participants } from '@watch-bracket/db';
 import { DisplaySubscribeSchema, ParticipantHeartbeatSchema, RoomSubscribeSchema } from '@watch-bracket/realtime-protocol';
 import { bumpRoomVersion } from './domain.js';
 import type { GameApiEnv } from './env.js';
-import { allowedOrigin, COOKIE } from './security.js';
+import { allowedRealtimeRequest, COOKIE } from './security.js';
 import { getSnapshot, toDisplayScene, type Presence } from './snapshots.js';
 import { hashToken } from '@watch-bracket/shared';
 import { z } from 'zod';
@@ -32,7 +32,7 @@ export function createRealtime(app: FastifyInstance, env: GameApiEnv) {
   };
   const io = new Server(app.server, {
     path: '/socket.io', maxHttpBufferSize: 16 * 1024, transports: ['websocket', 'polling'],
-    allowRequest: (request, callback) => callback(null, allowedOrigin(request.headers.origin, env))
+    allowRequest: (request, callback) => callback(null, allowedRealtimeRequest(request.headers, env))
   });
 
   const addPresence = (map: Map<string, number>, set: Set<string>, id: string) => { map.set(id, (map.get(id) ?? 0) + 1); set.add(id); };

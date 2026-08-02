@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import type { IncomingHttpHeaders } from "node:http";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { generateSessionToken } from "@watch-bracket/shared";
 import type { GameApiEnv } from "./env.js";
@@ -41,6 +42,17 @@ export function allowedOrigin(
     allowed.add("http://127.0.0.1:3000");
   }
   return allowed.has(origin);
+}
+export function allowedRealtimeRequest(
+  headers: IncomingHttpHeaders,
+  env: GameApiEnv,
+): boolean {
+  if (headers.origin) return allowedOrigin(headers.origin, env);
+  const forwardedHost = Array.isArray(headers["x-forwarded-host"])
+    ? headers["x-forwarded-host"][0]
+    : headers["x-forwarded-host"]?.split(",")[0];
+  const requestHost = (forwardedHost ?? headers.host)?.trim().toLowerCase();
+  return requestHost === new URL(env.PUBLIC_APP_URL).host.toLowerCase();
 }
 export function cookieOptions(
   env: GameApiEnv,

@@ -8,7 +8,7 @@ describe('TmdbProvider', () => {
     const fakeFetch = (async (input: URL | RequestInfo) => {
       const url = new URL(input instanceof URL ? input : String(input));
       expect(url.searchParams.get('api_key')).toBe('valid-read-token');
-      if (url.pathname === '/3/search/multi') return json({ results: [{ id: 11, media_type: 'movie', title: 'Example', release_date: '2024-03-01' }] });
+      if (url.pathname === '/3/search/multi') return json({ results: [{ id: 99, media_type: 'person', name: 'Example Performer' }, { id: 11, media_type: 'movie', title: 'Example', release_date: '2024-03-01' }] });
       if (url.pathname === '/3/movie/11') return json({
         id: 11, title: 'Example', original_title: 'Example Original', release_date: '2024-03-01', overview: 'A complete example.', runtime: 112,
         genres: [{ id: 878, name: 'Science Fiction' }], poster_path: '/poster.jpg', backdrop_path: '/backdrop.jpg', popularity: 25, vote_average: 7.5, vote_count: 1200, adult: false,

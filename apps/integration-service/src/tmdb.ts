@@ -6,7 +6,7 @@ const IMAGE_ORIGIN = 'https://image.tmdb.org/t/p';
 const METADATA_TTL_MS = 6 * 60 * 60 * 1000;
 
 const SearchItemSchema = z.object({
-  id: z.number().int().positive(), media_type: z.enum(['movie', 'tv']).optional(),
+  id: z.number().int().positive(), media_type: z.enum(['movie', 'tv', 'person']).optional(),
   title: z.string().optional(), name: z.string().optional(), original_title: z.string().optional(), original_name: z.string().optional(),
   release_date: z.string().optional(), first_air_date: z.string().optional(), overview: z.string().optional(),
   poster_path: z.string().nullable().optional(), backdrop_path: z.string().nullable().optional(), adult: z.boolean().optional(),

@@ -1,0 +1,10 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Non-secret deterministic fixtures"
+regexTarget = "match"
+regexes = [
+  '''d9ed4dc6-cf03-45b5-90e9-92bd1d0d43e7''',
+  '''replace-me-with-at-least-12-characters''',
+]

@@ -22,7 +22,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit --prod --audit-level critical
       - name: Scan repository for secrets
-        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.2 detect --source=/repo --redact --no-banner
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.2 detect --source=/repo --config=/repo/.gitleaks.toml --redact --no-banner
 
   containers:
     runs-on: ubuntu-latest

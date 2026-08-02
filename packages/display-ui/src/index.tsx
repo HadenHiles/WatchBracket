@@ -67,6 +67,13 @@ const styles: Record<string, CSSProperties> = {
 
 type Connection = "connected" | "reconnecting" | "revoked";
 const defaultLogoSrc = "/brand/watch-bracket-wordmark.png";
+const motionCss = `
+@keyframes wb-scene-in{from{opacity:0;transform:scale(.985)}to{opacity:1;transform:none}}
+@keyframes wb-card-in{from{opacity:0;transform:translateY(5vh) rotate(-1deg)}to{opacity:1;transform:none}}
+@keyframes wb-champion{0%{opacity:0;transform:translateY(10vh) scale(.75) rotate(-4deg)}65%{transform:translateY(-1vh) scale(1.06) rotate(1deg)}100%{opacity:1;transform:none}}
+@keyframes wb-confetti{0%{transform:translateY(-15vh) rotate(0);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}@keyframes wb-redemption{0%{opacity:0;transform:scale(.65);box-shadow:0 0 0 #ff5964}65%{transform:scale(1.06);box-shadow:0 0 55px #ff5964}100%{opacity:1;transform:none}}@keyframes wb-flyover{from{opacity:0;transform:perspective(600px) rotateX(35deg) translateY(30px)}to{opacity:1;transform:none}}
+[data-wb-scene]{animation:wb-scene-in .45s ease-out both;overflow:hidden}.wb-candidate-card{animation:wb-card-in .55s cubic-bezier(.2,.8,.2,1) both}.wb-candidate-card:nth-child(2){animation-delay:.12s}.wb-candidate-card.wb-redemption{animation:wb-redemption .75s ease-out both}.wb-champion-poster{animation:wb-champion .8s cubic-bezier(.2,.9,.2,1) both}.wb-winner-path{animation:wb-flyover .8s ease-out .35s both}.wb-confetti{position:fixed;inset:0;pointer-events:none;z-index:20}.wb-confetti i{position:absolute;top:-5vh;width:1.1vw;height:2.3vw;min-width:8px;min-height:14px;background:#ffd637;animation:wb-confetti 2.8s linear infinite}.wb-confetti i:nth-child(2n){background:#ef3e46;animation-delay:.35s}.wb-confetti i:nth-child(3n){background:#50c9e8;animation-delay:.7s}.wb-confetti i:nth-child(4n){background:#fffbea;animation-delay:1.05s}[data-low-power=true] .wb-confetti{display:none}[data-low-power=true] [data-wb-scene],[data-low-power=true] .wb-candidate-card,[data-low-power=true] .wb-champion-poster{animation-duration:.15s;filter:none!important}@media(prefers-reduced-motion:reduce){[data-wb-scene],.wb-candidate-card,.wb-champion-poster,.wb-winner-path{animation:none!important}.wb-confetti{display:none!important}}
+`;
 
 function BrandMark({
   src = defaultLogoSrc,
@@ -76,14 +83,14 @@ function BrandMark({
   centered?: boolean;
 }) {
   return (
-    <div
+    <><style>{motionCss}</style><div
       style={{
         ...styles.brandFrame,
         marginInline: centered ? "auto" : undefined,
       }}
     >
       <img style={styles.brandImage} src={src} alt="Watch Bracket" />
-    </div>
+    </div></>
   );
 }
 
@@ -134,13 +141,15 @@ export function LobbyDisplay({
   scene,
   connection = "connected",
   logoSrc = defaultLogoSrc,
+  lowPower = false,
 }: {
   scene: LobbyScene;
   connection?: Connection;
   logoSrc?: string;
+  lowPower?: boolean;
 }) {
   return (
-    <main style={styles.canvas}>
+    <main style={styles.canvas} data-wb-scene="lobby" data-low-power={lowPower}>
       <section>
         <BrandMark src={logoSrc} />
         <h1>{scene.roomName}</h1>
@@ -203,14 +212,16 @@ export function NominationProgressDisplay({
   scene,
   connection = "connected",
   logoSrc = defaultLogoSrc,
+  lowPower = false,
 }: {
   scene: NominationProgressScene;
   connection?: Connection;
   logoSrc?: string;
+  lowPower?: boolean;
 }) {
   const seconds = useSecondsRemaining(scene.deadline);
   return (
-    <main style={{ ...styles.canvas, gridTemplateColumns: "1fr 1.25fr" }}>
+    <main style={{ ...styles.canvas, gridTemplateColumns: "1fr 1.25fr" }} data-wb-scene="nominations" data-low-power={lowPower}>
       <section>
         <BrandMark src={logoSrc} />
         <div
@@ -274,16 +285,18 @@ export function RoomDisplay({
   scene,
   connection = "connected",
   logoSrc = defaultLogoSrc,
+  lowPower = false,
 }: {
   scene: DisplayScene;
   connection?: Connection;
   logoSrc?: string;
+  lowPower?: boolean;
 }) {
   const sceneDeadline = "deadline" in scene ? scene.deadline : null;
   const seconds = useSecondsRemaining(sceneDeadline);
   if (scene.type === "LOBBY")
     return (
-      <LobbyDisplay scene={scene} connection={connection} logoSrc={logoSrc} />
+      <LobbyDisplay scene={scene} connection={connection} logoSrc={logoSrc} lowPower={lowPower} />
     );
   if (scene.type === "NOMINATION_PROGRESS")
     return (
@@ -291,11 +304,13 @@ export function RoomDisplay({
         scene={scene}
         connection={connection}
         logoSrc={logoSrc}
+        lowPower={lowPower}
       />
     );
   if (scene.type === "WINNER")
     return (
-      <main style={{ ...styles.canvas, gridTemplateColumns: "1.35fr .65fr" }}>
+      <main style={{ ...styles.canvas, gridTemplateColumns: "1.35fr .65fr" }} data-wb-scene="winner" data-low-power={lowPower}>
+        <div className="wb-confetti" aria-hidden="true">{Array.from({length:16},(_,index)=><i key={index} style={{left:`${4+index*6}%`}} />)}</div>
         <section style={{ textAlign: "center" }}>
           <BrandMark src={logoSrc} centered />
           {scene.winner.posterUrl && (
@@ -309,6 +324,7 @@ export function RoomDisplay({
                 border: "4px solid #ffd637",
                 boxShadow: "8px 8px 0 #ef3e46",
               }}
+              className="wb-champion-poster"
             />
           )}
           <div style={{ color: "#fbbf24", fontWeight: 900 }}>WINNER</div>
@@ -330,7 +346,7 @@ export function RoomDisplay({
             {scene.winner.redemption ? "Second chance champion · " : ""}Seed #
             {scene.winner.seed}
           </p>
-          <div
+          <div className="wb-winner-path"
             style={{
               display: "flex",
               justifyContent: "center",
@@ -367,7 +383,7 @@ export function RoomDisplay({
   const stage = scene.stage.replaceAll("_", " ");
   if (scene.type === "MATCHUP_RESULT")
     return (
-      <main style={styles.canvas}>
+      <main style={styles.canvas} data-wb-scene="result" data-low-power={lowPower}>
         <section>
           <BrandMark src={logoSrc} />
           <div style={{ color: "#fbbf24", fontWeight: 900 }}>
@@ -420,7 +436,7 @@ export function RoomDisplay({
     );
   const voting = scene.type === "MATCHUP_VOTING";
   return (
-    <main style={styles.canvas}>
+    <main style={styles.canvas} data-wb-scene={voting ? "voting" : "intro"} data-low-power={lowPower}>
       <section>
         <BrandMark src={logoSrc} />
         <div
@@ -451,7 +467,8 @@ export function RoomDisplay({
         }}
       >
         {[scene.candidateA, scene.candidateB].map((item) => (
-          <article
+            <article
+              className={`wb-candidate-card${item.redemption ? " wb-redemption" : ""}`}
             key={item.id}
             style={{
               ...styles.person,

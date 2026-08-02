@@ -133,6 +133,9 @@ export default function ActiveDisplay() {
   const [state, setState] = useState<"connected" | "reconnecting" | "revoked">(
     "reconnecting",
   );
+  const [online, setOnline] = useState(true);
+  const [wakeLockActive, setWakeLockActive] = useState(false);
+  const [loadingSlow, setLoadingSlow] = useState(false);
   const roomId = useRef("");
   const sequence = useRef(0);
   const load = useCallback(async () => {
@@ -142,6 +145,23 @@ export default function ActiveDisplay() {
     sequence.current = snapshot.sequence;
     setScene(sceneFromSnapshot(snapshot));
   }, []);
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    update(); window.addEventListener("online", update); window.addEventListener("offline", update);
+    let lock: WakeLockSentinel | undefined;
+    const acquire = async () => {
+      try { lock = await navigator.wakeLock?.request("screen"); setWakeLockActive(Boolean(lock)); lock?.addEventListener("release",()=>setWakeLockActive(false)); }
+      catch { setWakeLockActive(false); }
+    };
+    const visible = () => { if (document.visibilityState === "visible") void acquire(); };
+    void acquire(); document.addEventListener("visibilitychange", visible);
+    return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update); document.removeEventListener("visibilitychange", visible); void lock?.release(); };
+  }, []);
+  useEffect(() => {
+    if (!scene) return;
+    const urls = "winner" in scene ? [scene.winner.posterUrl] : "candidateA" in scene ? [scene.candidateA.posterUrl, scene.candidateB.posterUrl] : [];
+    for (const url of urls) if (url) { const image = new Image(); image.src = url; }
+  }, [scene]);
   useEffect(() => {
     let socket: ReturnType<typeof io> | undefined;
     let disposed = false;
@@ -194,6 +214,11 @@ export default function ActiveDisplay() {
       socket?.disconnect();
     };
   }, [displaySessionId, load]);
+  useEffect(() => {
+    if (scene) { setLoadingSlow(false); return; }
+    const timer = window.setTimeout(() => setLoadingSlow(true), 10_000);
+    return () => window.clearTimeout(timer);
+  }, [scene]);
   if (state === "revoked")
     return (
       <RoomDisplay
@@ -216,9 +241,15 @@ export default function ActiveDisplay() {
         <div>
           <BrandLogo label="Shared display" />
           <h1>Connecting to the room…</h1>
-          <p>If this takes too long, pair the display again.</p>
+          <p>{loadingSlow ? "The room is taking longer than expected. Check the network, then pair this display again if it does not recover." : "Preloading tonight's presentation…"}</p>
         </div>
       </main>
     );
-  return <RoomDisplay scene={scene} connection={state} />;
+  return <>
+    <RoomDisplay scene={scene} connection={online ? state : "reconnecting"} />
+    <div className="display-tools" aria-live="polite">
+      <span>{online ? (wakeLockActive ? "Screen awake" : "Wake lock unavailable") : "Offline · reconnecting"}</span>
+      <button className="secondary" onClick={()=>void document.documentElement.requestFullscreen?.()}>Fullscreen</button>
+    </div>
+  </>;
 }

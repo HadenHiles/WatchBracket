@@ -73,6 +73,8 @@ export default function RoomPage() {
   const [winnerActionMessage, setWinnerActionMessage] = useState("");
   const [tvSeasonPolicy, setTvSeasonPolicy] = useState<"FIRST" | "LATEST" | "ALL">("FIRST");
   const [winnerActionPending, setWinnerActionPending] = useState(false);
+  const [effectsEnabled, setEffectsEnabled] = useState(false);
+  const previousState = useRef<RoomSnapshot["state"] | undefined>(undefined);
   const sequence = useRef(0);
   const load = useCallback(async () => {
     try {
@@ -125,6 +127,21 @@ export default function RoomPage() {
       socket.disconnect();
     };
   }, [roomId, load]);
+  useEffect(() => { setEffectsEnabled(window.localStorage.getItem("watch-bracket-effects") === "on"); }, []);
+  useEffect(() => {
+    if (!snapshot) return;
+    const changed = previousState.current && previousState.current !== snapshot.state;
+    previousState.current = snapshot.state;
+    const posters = snapshot.tournament ? [snapshot.tournament.champion?.posterUrl, snapshot.tournament.activeMatchup?.candidateA.posterUrl, snapshot.tournament.activeMatchup?.candidateB.posterUrl] : [];
+    for (const url of posters) if (url) { const image = new Image(); image.src = url; }
+    if (!changed || !effectsEnabled || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (snapshot.state === "VOTING") navigator.vibrate?.(25);
+    if (snapshot.state === "MATCHUP_RESULT") navigator.vibrate?.([35, 45, 35]);
+    if (snapshot.state === "WINNER") navigator.vibrate?.([60, 50, 90]);
+    if (["VOTING", "MATCHUP_RESULT", "WINNER"].includes(snapshot.state)) {
+      try { const audio = new AudioContext(); const oscillator = audio.createOscillator(); const gain = audio.createGain(); oscillator.frequency.value = snapshot.state === "WINNER" ? 660 : snapshot.state === "MATCHUP_RESULT" ? 440 : 330; gain.gain.setValueAtTime(.035, audio.currentTime); gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .16); oscillator.connect(gain).connect(audio.destination); oscillator.start(); oscillator.stop(audio.currentTime + .17); oscillator.addEventListener("ended",()=>void audio.close()); } catch { /* optional feedback */ }
+    }
+  }, [snapshot, effectsEnabled]);
   const joinUrl = useMemo(
     () => (snapshot ? `${window.location.origin}/join/${snapshot.code}` : ""),
     [snapshot],
@@ -219,6 +236,7 @@ export default function RoomPage() {
   return (
     <main className="shell stack">
       <BrandLogo label="Movie night" />
+      <button className="effects-toggle secondary" aria-pressed={effectsEnabled} onClick={()=>{const next=!effectsEnabled;setEffectsEnabled(next);window.localStorage.setItem("watch-bracket-effects",next?"on":"off");}}>{effectsEnabled ? "Sound + haptics on" : "Sound + haptics off"}</button>
       {host && castDisplay && (
         <div className="tv-strip">
           <span>
@@ -244,7 +262,7 @@ export default function RoomPage() {
       )}
       {error && <p className="error">{error}</p>}
       <section className="card">
-        <div className="status">
+        <div className="status" role="status" aria-live="polite">
           <span className={`dot ${connection === "connected" ? "" : "off"}`} />
           {connection}
         </div>
@@ -778,6 +796,7 @@ export default function RoomPage() {
                       server deadline.
                     </p>
                     <button
+                      aria-pressed={snapshot.tournament.activeMatchup.ownVote?.candidateId === snapshot.tournament.activeMatchup.candidateA.id}
                       className={
                         snapshot.tournament.activeMatchup.ownVote
                           ?.candidateId ===
@@ -800,6 +819,7 @@ export default function RoomPage() {
                       Vote {snapshot.tournament.activeMatchup.candidateA.title}
                     </button>
                     <button
+                      aria-pressed={snapshot.tournament.activeMatchup.ownVote?.candidateId === snapshot.tournament.activeMatchup.candidateB.id}
                       className={
                         snapshot.tournament.activeMatchup.ownVote
                           ?.candidateId ===
@@ -822,6 +842,7 @@ export default function RoomPage() {
                       Vote {snapshot.tournament.activeMatchup.candidateB.title}
                     </button>
                     <button
+                      aria-pressed={snapshot.tournament.activeMatchup.ownVote?.abstained === true}
                       className={
                         snapshot.tournament.activeMatchup.ownVote?.abstained
                           ? "secondary selected"

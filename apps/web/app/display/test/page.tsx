@@ -189,7 +189,7 @@ export default function TestMode() {
         }}
         data-reduced-motion={reduced}
       >
-        <RoomDisplay connection={state} scene={fixture(mode)} />
+        <RoomDisplay connection={state} scene={fixture(mode)} lowPower={reduced} />
       </div>
     </main>
   );

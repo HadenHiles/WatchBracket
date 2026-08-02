@@ -182,6 +182,9 @@ function toScene(value: unknown): DisplayScene {
 function Receiver() {
   const testMode =
     new URLSearchParams(window.location.search).get("test") === "1";
+  const lowPower =
+    (navigator.hardwareConcurrency ?? 4) <= 2 ||
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const [state, setState] = useState<ReceiverState>("BOOTING");
   const [scene, setScene] = useState<DisplayScene | undefined>(
     testMode ? fixture : undefined,
@@ -371,6 +374,7 @@ function Receiver() {
                 : "connected"
           }
           logoSrc="/cast/receiver/brand/watch-bracket-wordmark.png"
+          lowPower={lowPower}
         />
         <div className="receiver-state">
           {state.replaceAll("_", " ").toLowerCase()}

@@ -1,10 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, isNull, ne, sql } from 'drizzle-orm';
-import { auditEvents, mediaItems, participants, rooms, submissions } from '@watch-bracket/db';
+import { auditEvents, availabilitySnapshots, households, mediaItems, participants, rooms, submissions } from '@watch-bracket/db';
 import { mockCatalog, searchMockCatalog } from '@watch-bracket/mock-catalog';
+import type { CanonicalMediaItem } from '@watch-bracket/provider-contracts';
 import { HouseRulesSchema, type HouseRules } from '@watch-bracket/realtime-protocol';
 import type { DomainContext } from './domain.js';
 import { DomainError, requireRoomHost } from './domain.js';
+import { searchTmdb } from './providers.js';
+import { eligibilityFailures } from './eligibility.js';
 
 export const HOUSE_RULE_PRESETS: Record<HouseRules['preset'], HouseRules> = {
   QUICK_PICK: { preset: 'QUICK_PICK', nominationDurationSeconds: 60, nominationSlots: 2, revealMode: 'AFTER_DEADLINE' },
@@ -19,8 +22,36 @@ export async function seedMockCatalog(ctx: DomainContext) {
   }
 }
 
-export function searchCatalog(query: string, mediaType?: 'MOVIE' | 'TV') {
-  return searchMockCatalog(query, mediaType);
+export async function cacheTmdbItems(ctx: DomainContext, items: CanonicalMediaItem[], cachedUntil: string, roomId?: string) {
+  for (const item of items) {
+    const [stored] = await ctx.db.insert(mediaItems).values({
+      catalogKey: item.catalogKey, tmdbId: item.tmdbId, mediaType: item.mediaType, title: item.title, originalTitle: item.originalTitle, releaseDate: item.releaseDate, releaseYear: item.releaseYear,
+      runtimeMinutes: item.runtimeMinutes, contentRating: item.contentRating, genres: item.genres, synopsis: item.synopsis, posterUrl: item.posterUrl,
+      backdropUrl: item.backdropUrl, metadataExpiresAt: new Date(cachedUntil),
+      metadata: { source: 'TMDB', tmdbId: item.tmdbId, releaseDate: item.releaseDate, backdropUrl: item.backdropUrl, popularity: item.popularity, voteAverage: item.voteAverage, voteCount: item.voteCount, adult: item.adult, availability: item.availability, metadataExpiresAt: cachedUntil }
+    }).onConflictDoUpdate({ target: mediaItems.catalogKey, set: {
+      tmdbId: item.tmdbId, mediaType: item.mediaType, title: item.title, originalTitle: item.originalTitle, releaseDate: item.releaseDate, releaseYear: item.releaseYear, runtimeMinutes: item.runtimeMinutes,
+      contentRating: item.contentRating, genres: item.genres, synopsis: item.synopsis, posterUrl: item.posterUrl,
+      backdropUrl: item.backdropUrl, metadataExpiresAt: new Date(cachedUntil), metadata: { source: 'TMDB', tmdbId: item.tmdbId, releaseDate: item.releaseDate, backdropUrl: item.backdropUrl, popularity: item.popularity, voteAverage: item.voteAverage, voteCount: item.voteCount, adult: item.adult, availability: item.availability, metadataExpiresAt: cachedUntil }, updatedAt: new Date()
+    } }).returning({ id: mediaItems.id });
+    if (stored) await ctx.db.insert(availabilitySnapshots).values({ roomId, mediaItemId: stored.id, sourceType: 'TMDB_WATCH_PROVIDERS', sourceId: item.availability.region, status: item.availability.offers.length ? 'AVAILABLE' : 'NONE_FOUND', details: item.availability, expiresAt: new Date(cachedUntil) });
+  }
+}
+
+export async function searchCatalog(ctx: DomainContext, roomId: string, query: string, mediaType?: 'MOVIE' | 'TV') {
+  const [room] = await ctx.db.select({ rules: rooms.rules, householdId: rooms.householdId }).from(rooms).where(eq(rooms.id, roomId)).limit(1);
+  if (!room) throw new DomainError('ROOM_NOT_FOUND', 'Room not found.', 404);
+  const [household]=await ctx.db.select({region:households.region}).from(households).where(eq(households.id,room.householdId)).limit(1);
+  const rules = HouseRulesSchema.parse(room.rules);
+  try {
+    const result = await searchTmdb(ctx, { query, mediaType, region: household?.region??'CA' });
+    const valid = result.items.filter((item) => eligibilityFailures(item, rules).length === 0);
+    await cacheTmdbItems(ctx, valid, result.cachedUntil);
+    return { source: 'TMDB' as const, items: valid.map((item) => ({ catalogKey: item.catalogKey, mediaType: item.mediaType, title: item.title, releaseYear: item.releaseYear, runtimeMinutes: item.runtimeMinutes!, contentRating: item.contentRating ?? 'Unrated', genres: item.genres, synopsis: item.synopsis, posterUrl: item.posterUrl, availability: item.availability })) };
+  } catch (error) {
+    if (ctx.env.NODE_ENV === 'production') throw error;
+    return { source: 'MOCK' as const, warning: 'TMDB is unavailable; using the deterministic development catalog.', items: searchMockCatalog(query, mediaType).filter((item)=>eligibilityFailures(item,rules).length===0) };
+  }
 }
 
 export async function startNominations(ctx: DomainContext, participantId: string, roomId: string, input: HouseRules) {
@@ -41,6 +72,7 @@ export async function submitNomination(ctx: DomainContext, participantId: string
   return ctx.db.transaction(async (tx) => {
     const [room] = await tx.select().from(rooms).where(eq(rooms.id, roomId)).for('update').limit(1);
     if (!room || room.state !== 'NOMINATING' || !room.nominationDeadline || room.nominationDeadline.getTime() <= Date.now()) throw new DomainError('NOMINATIONS_CLOSED', 'Nominations are closed.', 409);
+    const failures=eligibilityFailures(item,HouseRulesSchema.parse(room.rules));if(failures.length)throw new DomainError('MEDIA_INELIGIBLE','That title does not match this room\'s hard filters.',409,{failures});
     const [participant] = await tx.select({ id: participants.id }).from(participants).where(and(eq(participants.id, participantId), eq(participants.roomId, roomId), isNull(participants.removedAt))).limit(1);
     if (!participant) throw new DomainError('ROOM_SESSION_REQUIRED', 'A room-scoped session is required.', 401);
     const [duplicate] = await tx.select({ id: submissions.id }).from(submissions).where(and(eq(submissions.roomId, roomId), eq(submissions.participantId, participantId), eq(submissions.mediaItemId, item.id), ne(submissions.rank, rank))).limit(1);

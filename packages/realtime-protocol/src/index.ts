@@ -6,14 +6,25 @@ export const HouseRulesSchema = z.object({
   preset: z.enum(['QUICK_PICK', 'MOVIE_NIGHT', 'DEEP_DIVE']),
   nominationDurationSeconds: z.number().int().min(30).max(900),
   nominationSlots: z.literal(2),
-  revealMode: z.literal('AFTER_DEADLINE')
+  revealMode: z.literal('AFTER_DEADLINE'),
+  mediaTypes: z.array(z.enum(['MOVIE', 'TV'])).min(1).max(2).optional(),
+  maxRuntimeMinutes: z.number().int().min(20).max(600).nullable().optional(),
+  releaseYearMin: z.number().int().min(1870).max(2200).nullable().optional(),
+  releaseYearMax: z.number().int().min(1870).max(2200).nullable().optional(),
+  excludedGenres: z.array(z.string().min(1)).max(20).optional(),
+  availabilityMode: z.enum(['ANY', 'WATCH_NOW']).optional(),
+  enabledStreamingProviderIds: z.array(z.number().int().positive()).max(50).optional()
 });
 export type HouseRules = z.infer<typeof HouseRulesSchema>;
-export const CatalogItemSchema = z.object({ catalogKey: z.string(), mediaType: z.enum(['MOVIE', 'TV']), title: z.string(), releaseYear: z.number().int(), runtimeMinutes: z.number().int(), contentRating: z.string(), genres: z.array(z.string()), synopsis: z.string() });
+export const AvailabilityOfferDtoSchema = z.object({ providerId: z.number().int().positive(), providerName: z.string(), logoUrl: z.url().nullable(), category: z.enum(['SUBSCRIPTION', 'FREE', 'ADS', 'RENT', 'BUY']) });
+export const CatalogItemSchema = z.object({
+  catalogKey: z.string(), mediaType: z.enum(['MOVIE', 'TV']), title: z.string(), releaseYear: z.number().int(), runtimeMinutes: z.number().int(), contentRating: z.string(), genres: z.array(z.string()), synopsis: z.string(),
+  posterUrl: z.url().nullable().optional(), availability: z.object({ region: z.string().length(2), link: z.url().nullable(), attribution: z.literal('JustWatch'), offers: z.array(AvailabilityOfferDtoSchema) }).optional()
+});
 export type CatalogItem = z.infer<typeof CatalogItemSchema>;
 export const SubmissionDtoSchema = CatalogItemSchema.extend({ rank: z.number().int().min(1).max(2) });
 export const CandidateDtoSchema = CatalogItemSchema.extend({ supportCount: z.number().int().positive(), bestRank: z.number().int().min(1).max(2) });
-export const TournamentCandidateSchema = CatalogItemSchema.extend({ id: z.uuid(), seed: z.number().int().positive(), strikes: z.number().int().nonnegative(), redemption: z.boolean(), sourceType: z.enum(['DIRECT','MOCK_WILDCARD']), supportCount: z.number().int().nonnegative() });
+export const TournamentCandidateSchema = CatalogItemSchema.extend({ id: z.uuid(), seed: z.number().int().positive(), strikes: z.number().int().nonnegative(), redemption: z.boolean(), sourceType: z.enum(['DIRECT','MOCK_WILDCARD','TMDB_WILDCARD']), supportCount: z.number().int().nonnegative() });
 export const TournamentStageSchema = z.enum(['QUALIFIER','SPOTLIGHT','REDEMPTION','REDEMPTION_FINAL','CHAMPIONSHIP_PLAY_IN','CHAMPIONSHIP_SEMI','CHAMPIONSHIP_FINAL']);
 export const TournamentSnapshotSchema = z.object({
   format: z.union([z.literal(8),z.literal(12),z.literal(16)]), totalMatchups: z.number().int().positive(), completedMatchups: z.number().int().nonnegative(), stage: TournamentStageSchema, status: z.enum(['ACTIVE','COMPLETED']), champion: TournamentCandidateSchema.nullable(),

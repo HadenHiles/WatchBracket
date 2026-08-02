@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { bigint, boolean, check, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { bigint, boolean, check, date, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
 
 export const adminRole = pgEnum('admin_role', ['ADMIN']);
 export const roomState = pgEnum('room_state', ['LOBBY', 'NOMINATING', 'NOMINATIONS_LOCKED', 'MATCHUP_INTRO', 'VOTING', 'MATCHUP_RESULT', 'WINNER', 'EXPIRED']);
@@ -7,7 +7,7 @@ export const participantRole = pgEnum('participant_role', ['HOST', 'PARTICIPANT'
 export const displayKind = pgEnum('display_kind', ['BROWSER', 'CAST']);
 export const actorType = pgEnum('actor_type', ['ADMIN', 'PARTICIPANT', 'DISPLAY', 'SYSTEM']);
 export const mediaType = pgEnum('media_type', ['MOVIE', 'TV']);
-export const candidateSource = pgEnum('candidate_source', ['DIRECT', 'MOCK_WILDCARD']);
+export const candidateSource = pgEnum('candidate_source', ['DIRECT', 'MOCK_WILDCARD', 'TMDB_WILDCARD']);
 export const candidateStatus = pgEnum('candidate_status', ['ACTIVE', 'ELIMINATED', 'WINNER']);
 export const tournamentStatus = pgEnum('tournament_status', ['ACTIVE', 'COMPLETED']);
 export const roundStage = pgEnum('round_stage', ['QUALIFIER', 'SPOTLIGHT', 'REDEMPTION', 'REDEMPTION_FINAL', 'CHAMPIONSHIP_PLAY_IN', 'CHAMPIONSHIP_SEMI', 'CHAMPIONSHIP_FINAL']);
@@ -121,18 +121,34 @@ export const castLaunchTokens = pgTable('cast_launch_tokens', {
 export const mediaItems = pgTable('media_items', {
   id: uuid('id').primaryKey().defaultRandom(),
   catalogKey: text('catalog_key').notNull(),
+  tmdbId: integer('tmdb_id'),
   mediaType: mediaType('media_type').notNull(),
   title: text('title').notNull(),
   originalTitle: text('original_title').notNull(),
+  releaseDate: date('release_date'),
   releaseYear: integer('release_year').notNull(),
   runtimeMinutes: integer('runtime_minutes'),
   contentRating: text('content_rating'),
   genres: jsonb('genres_json').notNull().default([]),
   synopsis: text('synopsis').notNull(),
   posterUrl: text('poster_url'),
+  backdropUrl: text('backdrop_url'),
   metadata: jsonb('metadata_json').notNull().default({ source: 'MOCK' }),
+  metadataExpiresAt: timestamp('metadata_expires_at', { withTimezone: true }),
   ...timestamps
-}, (table) => [uniqueIndex('media_items_catalog_key_uq').on(table.catalogKey), index('media_items_title_idx').on(table.title)]);
+}, (table) => [uniqueIndex('media_items_catalog_key_uq').on(table.catalogKey), uniqueIndex('media_items_tmdb_identity_uq').on(table.mediaType, table.tmdbId), index('media_items_title_idx').on(table.title)]);
+
+export const availabilitySnapshots = pgTable('availability_snapshots', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  roomId: uuid('room_id').references(() => rooms.id, { onDelete: 'cascade' }),
+  mediaItemId: uuid('media_item_id').notNull().references(() => mediaItems.id, { onDelete: 'cascade' }),
+  sourceType: text('source_type').notNull(),
+  sourceId: text('source_id').notNull(),
+  status: text('status').notNull(),
+  details: jsonb('details_json').notNull().default({}),
+  checkedAt: timestamp('checked_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
+}, (table) => [index('availability_media_expiry_idx').on(table.mediaItemId, table.expiresAt), index('availability_room_idx').on(table.roomId)]);
 
 export const submissions = pgTable('submissions', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -155,6 +171,7 @@ export const candidates = pgTable('candidates', {
   mediaItemId: uuid('media_item_id').notNull().references(() => mediaItems.id),
   sourceType: candidateSource('source_type').notNull(),
   scoreTotal: integer('score_total').notNull().default(0),
+  scoreComponents: jsonb('score_components_json').notNull().default({}),
   supportCount: integer('support_count').notNull().default(0),
   firstChoiceCount: integer('first_choice_count').notNull().default(0),
   nominatorIds: jsonb('nominator_ids_json').notNull().default([]),

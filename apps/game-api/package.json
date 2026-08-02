@@ -13,6 +13,7 @@
     "@watch-bracket/db": "workspace:*",
     "@watch-bracket/display-protocol": "workspace:*",
     "@watch-bracket/mock-catalog": "workspace:*",
+    "@watch-bracket/provider-contracts": "workspace:*",
     "@watch-bracket/realtime-protocol": "workspace:*",
     "@watch-bracket/shared": "workspace:*",
     "@watch-bracket/tournament-engine": "workspace:*",

@@ -77,8 +77,18 @@ dl { display: grid; grid-template-columns: auto 1fr; gap: .5rem 1rem; } dt { col
 .timer { font-variant-numeric: tabular-nums; font-size: clamp(2.5rem, 12vw, 5rem); font-weight: 900; letter-spacing: -.05em; }
 .ranked-pick { min-height: 72px; display: grid; grid-template-columns: 3rem 1fr; align-items: center; gap: .75rem; padding: .8rem; border: 1px solid #ffffff1c; border-radius: 14px; }
 .rank { font-size: 1.4rem; color: var(--accent); font-weight: 900; }
-.catalog-item { display: grid; gap: .8rem; padding: 1rem; border-radius: 14px; background: #ffffff0b; border: 1px solid #ffffff16; }
+.catalog-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .8rem 1rem; padding: 1rem; border-radius: 14px; background: #ffffff0b; border: 1px solid #ffffff16; }
 .catalog-item p { color: var(--muted); margin-bottom: 0; }
+.catalog-item > .actions { grid-column: 1 / -1; }
+.catalog-poster { width: 76px; aspect-ratio: 2 / 3; object-fit: cover; border: 2px solid #4e79c8; border-radius: 4px; box-shadow: 4px 4px 0 #020a25; }
+.availability { display: grid; gap: .5rem; margin-top: .8rem; }
+.provider-badges { display: flex; flex-wrap: wrap; gap: .4rem; }
+.provider-badge { padding: .28rem .5rem; border: 1px solid #4e79c8; border-radius: 4px; background: #082b72; color: #fffbea; font-size: .72rem; font-weight: 800; }
+.provider-badge.free, .provider-badge.ads { border-color: #42d392; background: #0c563f; }
+.provider-badge.rent, .provider-badge.buy { border-color: #ffd637; background: #5f4810; }
+.score-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: .6rem; }
+.score-grid > span { display: grid; gap: .2rem; padding: .65rem; border: 1px solid #4e79c8; border-radius: 5px; background: #082b72; }
+.score-grid small { color: var(--muted); text-transform: capitalize; }
 .candidate { display: flex; justify-content: space-between; gap: 1rem; padding: 1rem; border-radius: 14px; background: #ffffff0b; }
 .spread { justify-content: space-between; align-items: center; }
 .controller-timer { font-size: 2.5rem; font-weight: 900; font-variant-numeric: tabular-nums; }

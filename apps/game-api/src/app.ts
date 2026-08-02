@@ -16,6 +16,7 @@ import { startExpirationScheduler } from './scheduler.js';
 import { closeNominations, extendNominations, searchCatalog, seedMockCatalog, setNominationsReady, startNominations, submitNomination } from './nominations.js';
 import { getHouseholdSetup, saveHouseholdSetup } from './setup.js';
 import { extendVoting, processTournamentTransition, skipPresentation, startTournament, submitVote } from './tournament.js';
+import { getRecommendationDebug } from './recommendations.js';
 
 const LoginSchema = z.object({ email: z.email(), password: z.string().min(1).max(256) });
 const CreateRoomSchema = z.object({ name: z.string().trim().min(1).max(80), hostNickname: z.string().min(1).max(64) });
@@ -23,7 +24,7 @@ const JoinRoomSchema = z.object({ roomCode: z.string().min(4).max(10), nickname:
 const PairDisplaySchema = z.object({ pairingCode: z.string().min(4).max(10), displayName: z.string().trim().min(1).max(64).default('Shared display') });
 const CastExchangeSchema = z.object({ launchToken: z.string().min(32).max(256), protocolVersion: z.literal(1) });
 const SetupSchema = z.object({ name: z.string().trim().min(1).max(80), region: z.string().trim().min(2).max(8), timeZone: z.string().trim().min(1).max(64), defaultRules: HouseRulesSchema, completed: z.boolean() });
-const CatalogQuerySchema = z.object({ q: z.string().max(100).default(''), mediaType: z.enum(['MOVIE', 'TV']).optional() });
+const CatalogQuerySchema = z.object({ q: z.string().trim().min(1).max(100), mediaType: z.enum(['MOVIE', 'TV']).optional() });
 const StartNominationsSchema = z.object({ rules: HouseRulesSchema });
 const ExtendNominationsSchema = z.object({ seconds: z.number().int().min(30).max(300) });
 const SubmitNominationSchema = z.object({ catalogKey: z.string().min(1).max(128) });
@@ -114,6 +115,12 @@ export async function buildApp(env: GameApiEnv) {
       return await response.json();
     } catch { return { unavailable: true, providers: {} }; }
   });
+  app.get('/api/admin/rooms/:roomId/recommendation-debug', async (request) => {
+    const admin = await resolveAdmin(context, request.cookies[COOKIE.host]);
+    if (!admin) throw new DomainError('AUTH_REQUIRED', 'Administrator sign-in is required.', 401);
+    const { roomId } = parse(ParamsRoomSchema, request.params);
+    return { roomId, candidates: await getRecommendationDebug(app.db, roomId) };
+  });
 
   app.post('/api/rooms', { config: { rateLimit: { max: 10, timeWindow: '1 hour' } } }, async (request, reply) => {
     await mutationGuard(request, false);
@@ -169,7 +176,7 @@ export async function buildApp(env: GameApiEnv) {
     const participant = await resolveParticipant(context, request.cookies[COOKIE.participant]);
     if (!participant) throw new DomainError('ROOM_SESSION_REQUIRED', 'Join a room before searching the catalog.', 401);
     const query = parse(CatalogQuerySchema, request.query);
-    return { items: searchCatalog(query.q, query.mediaType) };
+    return searchCatalog(context, participant.roomId, query.q, query.mediaType);
   });
   app.post('/api/rooms/:roomId/nominations/start', async (request) => {
     await mutationGuard(request); const { roomId } = parse(ParamsRoomSchema, request.params);

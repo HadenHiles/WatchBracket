@@ -111,6 +111,9 @@ importers:
       '@watch-bracket/mock-catalog':
         specifier: workspace:*
         version: link:../../packages/mock-catalog
+      '@watch-bracket/provider-contracts':
+        specifier: workspace:*
+        version: link:../../packages/provider-contracts
       '@watch-bracket/realtime-protocol':
         specifier: workspace:*
         version: link:../../packages/realtime-protocol

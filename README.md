@@ -1,8 +1,8 @@
 # Watch Bracket
 
-Watch Bracket is a self-hosted, real-time party game for turning “what should we watch?” into a shared decision. This repository currently implements Milestones 0 through 4: NAS-oriented deployment, first-run household setup, durable rooms, browser and Chromecast displays, private ranked nominations, and the complete server-authoritative Double-Take tournament.
+Watch Bracket is a self-hosted, real-time party game for turning “what should we watch?” into a shared decision. This repository currently implements Milestones 0 through 5: NAS-oriented deployment, first-run household setup, durable rooms, browser and Chromecast displays, private ranked nominations, the complete server-authoritative Double-Take tournament, and TMDB-backed metadata, availability, and explainable recommendations.
 
-External media search, recommendations, and live provider operations are deliberately deferred. The local catalog and tournament require no API keys. Google Cast launching requires a registered Custom Web Receiver application ID and a registered physical test device; see `docs/cast/MILESTONE-2.md`.
+TMDB search and wildcard generation run exclusively through the private integration service. Development and test environments retain the deterministic local catalog as an explicit offline fallback; production never silently fills a bracket with fallback titles that bypass room filters. Google Cast launching requires a registered Custom Web Receiver application ID and a registered physical test device; see `docs/cast/MILESTONE-2.md`.
 
 ## Local prerequisites
 
@@ -48,8 +48,8 @@ Integration tests require a real, migrated PostgreSQL database and fail clearly 
 
 - `apps/web`: Next.js App Router mobile controller and browser display
 - `apps/game-api`: Fastify, Socket.IO, authoritative room state, and expiration scheduler
-- `apps/integration-service`: private Fastify boundary with explicit unimplemented provider operations
-- `packages/mock-catalog`: deterministic provider-free catalog used by nomination tests and local play
+- `apps/integration-service`: private Fastify boundary for narrow, typed provider operations; currently implements TMDB
+- `packages/mock-catalog`: deterministic provider-free catalog used by tests and development fallback only
 - `packages/tournament-engine`: pure deterministic 8-, 12-, and 16-title Double-Take rules
 - `apps/cast-receiver`: Vite-built Custom Web Receiver and deterministic receiver test mode
 - `packages/db`: Drizzle schema and migration; PostgreSQL is durable truth

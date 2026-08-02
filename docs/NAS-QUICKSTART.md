@@ -20,6 +20,8 @@ Replace every `replace-me` database password, bootstrap password, pepper, CSRF s
 
 Attach your reverse-proxy container to `watchbracket_edge`, adapt `infra/caddy/Caddyfile.example` for your hostname, and route only through that proxy. The app expects HTTPS in production because authentication cookies are secure.
 
+When Cloudflare Tunnel is the reverse proxy, route `/api/*` and `/socket.io/*` directly to `game-api:3001`, `/cast/receiver/*` to `cast-receiver:8080`, and the remaining hostname traffic to `web:3000`. Keep the Socket.IO rule direct so WebSocket room updates do not pass through the Next.js rewrite layer.
+
 ## Build and start
 
 ```sh

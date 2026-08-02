@@ -1,8 +1,8 @@
 # Watch Bracket
 
-Watch Bracket is a self-hosted, real-time party lobby for turning “what should we watch?” into a shared game. This repository currently implements Milestones 0 and 1: household-host authentication, durable lobby rooms, guest presence and restoration, locking, and a securely paired read-only browser display.
+Watch Bracket is a self-hosted, real-time party lobby for turning “what should we watch?” into a shared game. This repository currently implements Milestones 0 through 2: household-host authentication, durable lobby rooms, guest presence and restoration, locking, securely paired browser displays, and the Chromecast couch-display path.
 
-Media search, nominations, recommendations, voting, tournament logic, provider integrations, and Google Cast launching are deliberately not implemented yet. The static receiver shell is available at `/cast/receiver/`; launch-token exchange begins in Milestone 2.
+Media search, nominations, recommendations, voting, tournament logic, and provider integrations are deliberately not implemented yet. Google Cast launching requires a registered Custom Web Receiver application ID and a registered physical test device; see `docs/cast/MILESTONE-2.md`.
 
 ## Local prerequisites
 
@@ -49,10 +49,12 @@ Integration tests require a real, migrated PostgreSQL database and fail clearly 
 - `apps/web`: Next.js App Router mobile controller and browser display
 - `apps/game-api`: Fastify, Socket.IO, authoritative room state, and expiration scheduler
 - `apps/integration-service`: private Fastify boundary with explicit unimplemented provider operations
-- `apps/cast-receiver`: Vite-built static receiver shell
+- `apps/cast-receiver`: Vite-built Custom Web Receiver and deterministic receiver test mode
 - `packages/db`: Drizzle schema and migration; PostgreSQL is durable truth
 - `packages/realtime-protocol` and `packages/display-protocol`: versioned Zod contracts
 
 Browsers access one public origin through Caddy. Only the game API reaches PostgreSQL. Display sessions are room-scoped, read-only, independently reconnectable, and revocable.
+
+The Cast sender passes only a single-use launch token over the custom namespace. The receiver exchanges it once and then connects directly to the game API using an in-memory display bearer token. Set `CAST_RECEIVER_APP_ID` at web build time after completing Google Cast registration.
 
 See [deployment](docs/DEPLOYMENT.md), [security](docs/SECURITY.md), and the complete [product specification](docs/SPEC.md).

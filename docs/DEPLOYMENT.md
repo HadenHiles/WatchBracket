@@ -12,6 +12,8 @@ Watch Bracket is designed to join an existing Caddy and cloudflared stack. It do
 
 Caddy routes `/api/*` and `/socket.io/*` to `game-api`, `/cast/receiver*` to the static receiver, and all other paths to `web`. The alias uses a 308 redirect to `https://bracket.famflix.live{uri}`, which preserves path and query string.
 
+After registering the Custom Web Receiver, set `CAST_RECEIVER_APP_ID` before building the web image. The registered receiver URL must be `https://bracket.famflix.live/cast/receiver/`; Cast devices cannot use localhost for the published receiver.
+
 ## Cloudflare Tunnel
 
 Use `infra/cloudflared/config.example.yml` in the existing cloudflared deployment. Both public hostnames point only to Caddy. Never add direct tunnel routes to the API, integration service, PostgreSQL, or other NAS services. WebSockets must remain enabled and interactive challenges must not cover Socket.IO or the receiver path.

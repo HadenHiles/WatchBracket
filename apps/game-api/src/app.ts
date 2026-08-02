@@ -6,7 +6,7 @@ import Fastify, { type FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { createDatabase, participants, rooms } from '@watch-bracket/db';
 import { apiError, generateSessionToken, hashToken } from '@watch-bracket/shared';
-import { bootstrapAdmin, createDisplayPairingCode, createRoom, DomainError, joinRoom, login, logout, pairDisplay, resolveAdmin, resolveDisplay, resolveParticipant, revokeDisplay, setRoomLock } from './domain.js';
+import { bootstrapAdmin, createCastLaunchToken, createDisplayPairingCode, createRoom, DomainError, exchangeCastLaunchToken, joinRoom, login, logout, pairDisplay, resolveAdmin, resolveDisplay, resolveParticipant, revokeDisplay, setRoomLock } from './domain.js';
 import type { GameApiEnv } from './env.js';
 import { createRealtime, type RealtimeRuntime } from './realtime.js';
 import { COOKIE, allowedOrigin, cookieOptions, issueCsrf, verifyCsrf } from './security.js';
@@ -17,6 +17,7 @@ const LoginSchema = z.object({ email: z.email(), password: z.string().min(1).max
 const CreateRoomSchema = z.object({ name: z.string().trim().min(1).max(80), hostNickname: z.string().min(1).max(64) });
 const JoinRoomSchema = z.object({ roomCode: z.string().min(4).max(10), nickname: z.string().min(1).max(64) });
 const PairDisplaySchema = z.object({ pairingCode: z.string().min(4).max(10), displayName: z.string().trim().min(1).max(64).default('Shared display') });
+const CastExchangeSchema = z.object({ launchToken: z.string().min(32).max(256), protocolVersion: z.literal(1) });
 const ParamsRoomSchema = z.object({ roomId: z.uuid() });
 const ParamsDisplaySchema = z.object({ displaySessionId: z.uuid() });
 
@@ -136,6 +137,13 @@ export async function buildApp(env: GameApiEnv) {
     if (!participant) throw new DomainError('HOST_REQUIRED', 'Room host authorization is required.', 403);
     const result = await createDisplayPairingCode(context, participant.id, roomId); return { pairingCode: result.code, expiresAt: result.expiresAt.toISOString() };
   });
+  app.post('/api/rooms/:roomId/cast-launch-tokens', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request) => {
+    await mutationGuard(request); const { roomId } = parse(ParamsRoomSchema, request.params);
+    const [admin, participant] = await Promise.all([resolveAdmin(context, request.cookies[COOKIE.host]), resolveParticipant(context, request.cookies[COOKIE.participant])]);
+    if (!admin || !participant) throw new DomainError('HOST_REQUIRED', 'Authenticated room host authorization is required.', 403);
+    const result = await createCastLaunchToken(context, admin.sessionId, participant.id, roomId);
+    return { launchToken: result.token, protocolVersion: result.protocolVersion, expiresAt: result.expiresAt.toISOString() };
+  });
   app.post('/api/displays/pair', { config: { rateLimit: { max: 10, timeWindow: '5 minutes' } } }, async (request, reply) => {
     await mutationGuard(request, false);
     const result = await pairDisplay(context, parse(PairDisplaySchema, request.body));
@@ -143,9 +151,18 @@ export async function buildApp(env: GameApiEnv) {
     await realtime.broadcastRoom(result.display.roomId, 'display:paired');
     return { displaySessionId: result.display.id, roomId: result.display.roomId, expiresAt: result.display.expiresAt.toISOString() };
   });
+  app.post('/api/displays/cast/exchange', { config: { rateLimit: { max: 10, timeWindow: '5 minutes' } } }, async (request) => {
+    await mutationGuard(request, false);
+    const result = await exchangeCastLaunchToken(context, parse(CastExchangeSchema, request.body));
+    for (const displayId of result.replacedDisplaySessionIds) await realtime.revokeDisplaySocket(displayId, result.display.roomId, false, 'REPLACED');
+    await realtime.broadcastRoom(result.display.roomId, 'display:paired');
+    return { displaySessionId: result.display.id, roomId: result.display.roomId, displayToken: result.token, expiresAt: result.display.expiresAt.toISOString(), protocolVersion: 1 };
+  });
   app.get('/api/displays/:displaySessionId/snapshot', async (request) => {
     const { displaySessionId } = parse(ParamsDisplaySchema, request.params);
-    const display = await resolveDisplay(context, request.cookies[COOKIE.display]);
+    const authorization = request.headers.authorization;
+    const bearer = typeof authorization === 'string' && authorization.startsWith('Bearer ') ? authorization.slice(7) : undefined;
+    const display = await resolveDisplay(context, request.cookies[COOKIE.display] ?? bearer);
     if (!display || display.id !== displaySessionId) throw new DomainError('DISPLAY_SESSION_REQUIRED', 'A valid display session is required.', 401);
     return getSnapshot(app.db, display.roomId, 'DISPLAY', realtime.presence);
   });

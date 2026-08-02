@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const ParticipantDtoSchema = z.object({ id: z.uuid().optional(), nickname: z.string(), role: z.enum(['HOST', 'PARTICIPANT']), connected: z.boolean() });
-export const DisplayDtoSchema = z.object({ id: z.uuid(), name: z.string(), connected: z.boolean() });
+export const DisplayDtoSchema = z.object({ id: z.uuid(), name: z.string(), kind: z.enum(['BROWSER', 'CAST']), connected: z.boolean() });
 export const RoomSnapshotSchema = z.object({
   roomId: z.uuid(), name: z.string(), code: z.string(), state: z.enum(['LOBBY', 'EXPIRED']), locked: z.boolean(),
   sequence: z.number().int().nonnegative(), viewer: z.enum(['HOST', 'PARTICIPANT', 'DISPLAY']),

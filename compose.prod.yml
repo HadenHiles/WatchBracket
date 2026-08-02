@@ -63,6 +63,7 @@ services:
       ROOM_MAX_PARTICIPANTS: ${ROOM_MAX_PARTICIPANTS:-8}
       ROOM_TTL_HOURS: ${ROOM_TTL_HOURS:-12}
       DISPLAY_PAIRING_TTL_SECONDS: ${DISPLAY_PAIRING_TTL_SECONDS:-300}
+      CAST_LAUNCH_TOKEN_TTL_SECONDS: ${CAST_LAUNCH_TOKEN_TTL_SECONDS:-60}
     networks: [edge, data, integrations]
     depends_on:
       migrate: { condition: service_completed_successfully }
@@ -77,7 +78,7 @@ services:
     build:
       context: .
       dockerfile: infra/docker/web.Dockerfile
-      args: { GAME_API_INTERNAL_URL: "http://game-api:3001", NEXT_PUBLIC_ENABLE_PRESENTATION_TEST_MODE: "false" }
+      args: { GAME_API_INTERNAL_URL: "http://game-api:3001", NEXT_PUBLIC_ENABLE_PRESENTATION_TEST_MODE: "false", CAST_RECEIVER_APP_ID: "${CAST_RECEIVER_APP_ID}" }
     networks: [edge]
     depends_on: { game-api: { condition: service_healthy } }
     healthcheck: { test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/"], interval: 15s, timeout: 3s, retries: 10 }

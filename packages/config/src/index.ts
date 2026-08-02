@@ -21,7 +21,8 @@ export const GameApiEnvSchema = base.extend({
   ROOM_CODE_LENGTH: z.coerce.number().int().min(4).max(10).default(6),
   ROOM_MAX_PARTICIPANTS: z.coerce.number().int().min(2).max(32).default(8),
   ROOM_TTL_HOURS: z.coerce.number().positive().default(12),
-  DISPLAY_PAIRING_TTL_SECONDS: z.coerce.number().int().min(30).max(300).default(300)
+  DISPLAY_PAIRING_TTL_SECONDS: z.coerce.number().int().min(30).max(300).default(300),
+  CAST_LAUNCH_TOKEN_TTL_SECONDS: z.coerce.number().int().min(15).max(60).default(60)
 });
 
 export const IntegrationEnvSchema = base.pick({ NODE_ENV: true, DATABASE_URL: true }).extend({
@@ -37,4 +38,3 @@ export function parseEnv<T>(schema: z.ZodType<T>, env: NodeJS.ProcessEnv): T {
   }
   return result.data;
 }
-

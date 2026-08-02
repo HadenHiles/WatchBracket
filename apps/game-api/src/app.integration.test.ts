@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { createDatabase, adminUsers, displayPairingCodes, participants, rooms } from '@watch-bracket/db';
+import { createDatabase, adminUsers, castLaunchTokens, displayPairingCodes, participants, rooms } from '@watch-bracket/db';
 import { bootstrapAdmin } from './domain.js';
 import { buildApp } from './app.js';
 import { startExpirationScheduler } from './scheduler.js';
@@ -21,7 +21,7 @@ suite('Milestone 1 API against PostgreSQL', () => {
     ADMIN_BOOTSTRAP_EMAIL: 'host@example.com', ADMIN_BOOTSTRAP_PASSWORD: 'correct-horse-battery-staple',
     HOST_SESSION_PEPPER: 'host-session-pepper-for-tests', PARTICIPANT_SESSION_PEPPER: 'participant-session-pepper-tests', DISPLAY_SESSION_PEPPER: 'display-session-pepper-tests', CSRF_SECRET: 'csrf-secret-value-for-tests',
     INTEGRATION_SERVICE_INTERNAL_URL: 'http://integration-service:3002', INTEGRATION_SERVICE_SHARED_SECRET: 'integration-shared-secret-tests',
-    ROOM_CODE_LENGTH: 6, ROOM_MAX_PARTICIPANTS: 8, ROOM_TTL_HOURS: 12, DISPLAY_PAIRING_TTL_SECONDS: 300
+    ROOM_CODE_LENGTH: 6, ROOM_MAX_PARTICIPANTS: 8, ROOM_TTL_HOURS: 12, DISPLAY_PAIRING_TTL_SECONDS: 300, CAST_LAUNCH_TOKEN_TTL_SECONDS: 60
   };
   const inspector = createDatabase(databaseUrl!, { max: 2 });
   let app: Awaited<ReturnType<typeof buildApp>>;
@@ -30,7 +30,7 @@ suite('Milestone 1 API against PostgreSQL', () => {
   const cookieHeader = (cookies: Record<string,string>) => Object.entries(cookies).map(([name,value]) => `${name}=${value}`).join('; ');
 
   beforeAll(async () => {
-    await inspector.client.unsafe('TRUNCATE TABLE audit_events, idempotency_keys, display_sessions, display_pairing_codes, participants, rooms, admin_sessions, admin_users, households RESTART IDENTITY CASCADE');
+    await inspector.client.unsafe('TRUNCATE TABLE audit_events, idempotency_keys, cast_launch_tokens, display_sessions, display_pairing_codes, participants, rooms, admin_sessions, admin_users, households RESTART IDENTITY CASCADE');
     app = await buildApp(env); await app.ready();
   });
   afterAll(async () => { await app?.close(); await inspector.client.end(); });
@@ -94,6 +94,24 @@ suite('Milestone 1 API against PostgreSQL', () => {
     expect((await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/lock`, headers: { ...origin, cookie: cookieHeader({ wb_display: displayCookie, wb_csrf: displayCsrf }), 'x-csrf-token': displayCsrf }, payload: {} })).statusCode).toBe(403);
     expect((await app.inject({ method: 'DELETE', url: `/api/displays/${pair.json().displaySessionId}`, headers: hostHeaders })).json()).toMatchObject({ revoked: true });
     expect((await app.inject({ method: 'GET', url: `/api/displays/${pair.json().displaySessionId}/snapshot`, headers: { cookie: `wb_display=${displayCookie}` } })).statusCode).toBe(401);
+
+    const expiredLaunch = await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/cast-launch-tokens`, headers: hostHeaders, payload: {} });
+    expect(expiredLaunch.statusCode).toBe(200);
+    await inspector.db.update(castLaunchTokens).set({ expiresAt: new Date(0) }).where(eq(castLaunchTokens.tokenHash, (await inspector.db.select().from(castLaunchTokens).orderBy(castLaunchTokens.createdAt).limit(1))[0]!.tokenHash));
+    expect((await app.inject({ method: 'POST', url: '/api/displays/cast/exchange', headers: origin, payload: { launchToken: expiredLaunch.json().launchToken, protocolVersion: 1 } })).statusCode).toBe(410);
+    const launch = await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/cast-launch-tokens`, headers: hostHeaders, payload: {} });
+    const castExchange = await app.inject({ method: 'POST', url: '/api/displays/cast/exchange', headers: origin, payload: { launchToken: launch.json().launchToken, protocolVersion: 1 } });
+    expect(castExchange.statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: '/api/displays/cast/exchange', headers: origin, payload: { launchToken: launch.json().launchToken, protocolVersion: 1 } })).statusCode).toBe(409);
+    const castSession = castExchange.json();
+    const castSnapshot = await app.inject({ method: 'GET', url: `/api/displays/${castSession.displaySessionId}/snapshot`, headers: { authorization: `Bearer ${castSession.displayToken}` } });
+    expect(castSnapshot.statusCode).toBe(200); expect(castSnapshot.json()).toMatchObject({ roomId: created.roomId, viewer: 'DISPLAY' });
+    expect((await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/lock`, headers: { ...origin, authorization: `Bearer ${castSession.displayToken}` }, payload: {} })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'DELETE', url: `/api/displays/${castSession.displaySessionId}`, headers: hostHeaders })).json()).toMatchObject({ revoked: true });
+
+    const revokedIssuerLaunch = await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/cast-launch-tokens`, headers: hostHeaders, payload: {} });
+    expect((await app.inject({ method: 'POST', url: '/api/auth/logout', headers: hostHeaders, payload: {} })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: '/api/displays/cast/exchange', headers: origin, payload: { launchToken: revokedIssuerLaunch.json().launchToken, protocolVersion: 1 } })).statusCode).toBe(401);
 
     await inspector.db.update(rooms).set({ expiresAt: new Date(0) }).where(eq(rooms.id, created.roomId));
     const stop = startExpirationScheduler(inspector.db, () => undefined, 10);

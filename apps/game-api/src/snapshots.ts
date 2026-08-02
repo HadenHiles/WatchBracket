@@ -14,7 +14,7 @@ export async function getSnapshot(db: Database, roomId: string, viewer: RoomSnap
   return {
     roomId: room.id, name: room.name, code: room.code, state: room.state, locked: Boolean(room.lockedAt), sequence: room.version, viewer,
     participants: people.map((person) => ({ ...(viewer === 'DISPLAY' ? {} : { id: person.id }), nickname: person.displayNickname, role: person.role === 'HOST' ? 'HOST' as const : 'PARTICIPANT' as const, connected: presence.participantIds.has(person.id) })),
-    displays: displays.map((display) => ({ id: display.id, name: display.displayName, connected: presence.displayIds.has(display.id) }))
+    displays: displays.map((display) => ({ id: display.id, name: display.displayName, kind: display.kind, connected: presence.displayIds.has(display.id) }))
   };
 }
 

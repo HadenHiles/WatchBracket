@@ -4,7 +4,7 @@ import { bigint, index, integer, jsonb, pgEnum, pgTable, text, timestamp, unique
 export const adminRole = pgEnum('admin_role', ['ADMIN']);
 export const roomState = pgEnum('room_state', ['LOBBY', 'EXPIRED']);
 export const participantRole = pgEnum('participant_role', ['HOST', 'PARTICIPANT', 'CO_HOST', 'SPECTATOR']);
-export const displayKind = pgEnum('display_kind', ['BROWSER']);
+export const displayKind = pgEnum('display_kind', ['BROWSER', 'CAST']);
 export const actorType = pgEnum('actor_type', ['ADMIN', 'PARTICIPANT', 'DISPLAY', 'SYSTEM']);
 
 const timestamps = {
@@ -91,6 +91,18 @@ export const displaySessions = pgTable('display_sessions', {
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, (table) => [uniqueIndex('display_sessions_token_uq').on(table.tokenHash), index('display_sessions_active_idx').on(table.roomId, table.expiresAt, table.revokedAt)]);
+
+export const castLaunchTokens = pgTable('cast_launch_tokens', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  roomId: uuid('room_id').notNull().references(() => rooms.id, { onDelete: 'cascade' }),
+  issuedToHostSessionId: uuid('issued_to_host_session_id').notNull().references(() => adminSessions.id, { onDelete: 'cascade' }),
+  tokenHash: text('token_hash').notNull(),
+  protocolVersion: integer('protocol_version').notNull().default(1),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  receiverSessionId: uuid('receiver_session_id').references(() => displaySessions.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, (table) => [uniqueIndex('cast_launch_tokens_hash_uq').on(table.tokenHash), index('cast_launch_tokens_expiry_idx').on(table.roomId, table.expiresAt, table.consumedAt)]);
 
 export const idempotencyKeys = pgTable('idempotency_keys', {
   id: uuid('id').primaryKey().defaultRandom(),

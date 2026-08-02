@@ -15,6 +15,8 @@ Host, participant, and display credentials are separate opaque tokens. Only keye
 
 Room and pairing codes are lookup handles, not sessions. Pairing codes expire within five minutes, are one-time use, are attempt/rate limited, and are stored only as hashes.
 
+Cast launch tokens expire within 60 seconds and are consumed transactionally once. The custom Cast message carries no room ID, participant identity, or long-lived credential. Cast display bearer tokens remain in receiver memory, are accepted only as read-only display authorization, and are redacted from logs.
+
 ## Defensive controls
 
 All environment, HTTP, internal-provider, and realtime inputs use Zod schemas. Request bodies and Socket.IO buffers are bounded. Errors use stable codes and request IDs. Pino redacts cookies, authorization, CSRF material, passwords, and tokens. Audit metadata contains IDs and safe action context only.
@@ -24,4 +26,3 @@ The integration boundary has no generic proxy or user-controlled URL operation. 
 The example Caddy configuration applies HSTS, nosniff, referrer, and permissions headers. The receiver gets a narrow CSP. Do not weaken it to admit arbitrary scripts, images, or connection destinations.
 
 For a future public release, security reports will be accepted through a private advisory channel documented in `SECURITY.md`; the private deployment currently has no public reporting address.
-

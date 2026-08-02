@@ -26,6 +26,7 @@ label { display: grid; gap: .45rem; color: var(--muted); font-weight: 650; }
 .status { display: inline-flex; align-items: center; gap: .5rem; color: var(--muted); }
 .dot { width: .65rem; height: .65rem; border-radius: 50%; background: #4ade80; }
 .dot.off { background: #fbbf24; }
+.tv-strip { position: sticky; top: .75rem; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 1rem; background: #241b38f2; border: 1px solid #d8b4fe55; border-radius: 16px; padding: .75rem 1rem; backdrop-filter: blur(12px); }
+.cast-launcher { width: 48px; height: 48px; --connected-color: #d8b4fe; --disconnected-color: #ffffff; }
 @media (min-width: 680px) { .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
-

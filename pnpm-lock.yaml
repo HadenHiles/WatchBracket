@@ -47,12 +47,27 @@ importers:
 
   apps/cast-receiver:
     dependencies:
+      '@watch-bracket/display-protocol':
+        specifier: workspace:*
+        version: link:../../packages/display-protocol
+      '@watch-bracket/display-ui':
+        specifier: workspace:*
+        version: link:../../packages/display-ui
+      '@watch-bracket/realtime-protocol':
+        specifier: workspace:*
+        version: link:../../packages/realtime-protocol
       react:
         specifier: 19.2.8
         version: 19.2.8
       react-dom:
         specifier: 19.2.8
         version: 19.2.8(react@19.2.8)
+      socket.io-client:
+        specifier: 4.8.3
+        version: 4.8.3
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/react':
         specifier: 19.1.10

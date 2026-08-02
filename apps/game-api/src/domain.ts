@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { Algorithm, hash as hashPassword, verify as verifyPassword } from '@node-rs/argon2';
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import type { Database } from '@watch-bracket/db';
-import { adminSessions, adminUsers, auditEvents, displayPairingCodes, displaySessions, households, idempotencyKeys, participants, rooms } from '@watch-bracket/db';
+import { adminSessions, adminUsers, auditEvents, castLaunchTokens, displayPairingCodes, displaySessions, households, idempotencyKeys, participants, rooms } from '@watch-bracket/db';
 import { generatePairingCode, generateRoomCode, generateSessionToken, hashToken, isPairingCodeExpired, normalizeNickname } from '@watch-bracket/shared';
 import type { GameApiEnv } from './env.js';
 
@@ -142,6 +142,43 @@ export async function createDisplayPairingCode(ctx: DomainContext, participantId
   await ctx.db.insert(displayPairingCodes).values({ roomId, codeHash: hashToken(code, ctx.env.DISPLAY_SESSION_PEPPER), expiresAt });
   await ctx.db.insert(auditEvents).values({ householdId: room.householdId, roomId, actorType: 'PARTICIPANT', actorId: participantId, eventType: 'DISPLAY_PAIRING_CODE_CREATED' });
   return { code, expiresAt };
+}
+
+export async function createCastLaunchToken(ctx: DomainContext, adminSessionId: string, participantId: string, roomId: string) {
+  const room = await requireRoomHost(ctx.db, participantId, roomId);
+  const token = generateSessionToken();
+  const expiresAt = new Date(Date.now() + ctx.env.CAST_LAUNCH_TOKEN_TTL_SECONDS * 1000);
+  await ctx.db.transaction(async (tx) => {
+    await tx.update(castLaunchTokens).set({ consumedAt: new Date() }).where(and(eq(castLaunchTokens.roomId, roomId), isNull(castLaunchTokens.consumedAt)));
+    await tx.insert(castLaunchTokens).values({ roomId, issuedToHostSessionId: adminSessionId, tokenHash: hashToken(token, ctx.env.DISPLAY_SESSION_PEPPER), protocolVersion: 1, expiresAt });
+    await tx.insert(auditEvents).values({ householdId: room.householdId, roomId, actorType: 'PARTICIPANT', actorId: participantId, eventType: 'CAST_LAUNCH_TOKEN_CREATED', metadata: { protocolVersion: 1 } });
+  });
+  return { token, expiresAt, protocolVersion: 1 as const };
+}
+
+export async function exchangeCastLaunchToken(ctx: DomainContext, body: { launchToken: string; protocolVersion: 1 }) {
+  const { db, env } = ctx;
+  const launchHash = hashToken(body.launchToken, env.DISPLAY_SESSION_PEPPER);
+  return db.transaction(async (tx) => {
+    const [launch] = await tx.select().from(castLaunchTokens).where(eq(castLaunchTokens.tokenHash, launchHash)).for('update').limit(1);
+    if (!launch) throw new DomainError('CAST_LAUNCH_TOKEN_INVALID', 'The Cast launch token is invalid.', 400);
+    if (launch.protocolVersion !== body.protocolVersion) throw new DomainError('CAST_PROTOCOL_MISMATCH', 'The receiver protocol is not supported.', 409);
+    if (launch.consumedAt) throw new DomainError('CAST_LAUNCH_TOKEN_USED', 'The Cast launch token has already been used.', 409);
+    if (launch.expiresAt.getTime() <= Date.now()) throw new DomainError('CAST_LAUNCH_TOKEN_EXPIRED', 'The Cast launch token has expired.', 410);
+    const [issuerSession] = await tx.select({ id: adminSessions.id }).from(adminSessions)
+      .where(and(eq(adminSessions.id, launch.issuedToHostSessionId), isNull(adminSessions.revokedAt), gt(adminSessions.expiresAt, new Date()))).limit(1);
+    if (!issuerSession) throw new DomainError('CAST_LAUNCH_TOKEN_INVALID', 'The Cast launch token is invalid.', 401);
+    const [room] = await tx.select().from(rooms).where(and(eq(rooms.id, launch.roomId), eq(rooms.state, 'LOBBY'))).limit(1);
+    if (!room?.hostParticipantId) throw new DomainError('ROOM_UNAVAILABLE', 'That room is unavailable.', 404);
+    const existing = await tx.select({ id: displaySessions.id }).from(displaySessions).where(and(eq(displaySessions.roomId, room.id), eq(displaySessions.kind, 'CAST'), isNull(displaySessions.revokedAt), gt(displaySessions.expiresAt, new Date())));
+    if (existing.length) await tx.update(displaySessions).set({ revokedAt: new Date() }).where(and(eq(displaySessions.roomId, room.id), eq(displaySessions.kind, 'CAST'), isNull(displaySessions.revokedAt)));
+    const displayToken = generateSessionToken();
+    const [display] = await tx.insert(displaySessions).values({ roomId: room.id, kind: 'CAST', displayName: 'Cast display', tokenHash: hashToken(displayToken, env.DISPLAY_SESSION_PEPPER), pairedByParticipantId: room.hostParticipantId, expiresAt: room.expiresAt }).returning();
+    await tx.update(castLaunchTokens).set({ consumedAt: new Date(), receiverSessionId: display!.id }).where(eq(castLaunchTokens.id, launch.id));
+    await tx.update(rooms).set({ version: sql`${rooms.version} + 1`, updatedAt: new Date() }).where(eq(rooms.id, room.id));
+    await tx.insert(auditEvents).values({ householdId: room.householdId, roomId: room.id, actorType: 'PARTICIPANT', actorId: room.hostParticipantId, eventType: 'CAST_RECEIVER_PAIRED', metadata: { displaySessionId: display!.id, protocolVersion: 1 } });
+    return { display: display!, token: displayToken, replacedDisplaySessionIds: existing.map((item) => item.id) };
+  });
 }
 
 export async function pairDisplay(ctx: DomainContext, body: { pairingCode: string; displayName: string }) {

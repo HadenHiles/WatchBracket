@@ -9,6 +9,7 @@ import type { GameApiEnv } from './env.js';
 import { allowedOrigin, COOKIE } from './security.js';
 import { getSnapshot, toLobbyScene, type Presence } from './snapshots.js';
 import { hashToken } from '@watch-bracket/shared';
+import { z } from 'zod';
 
 type ParticipantActor = { kind: 'PARTICIPANT'; id: string; roomId: string; role: 'HOST' | 'PARTICIPANT' };
 type DisplayActor = { kind: 'DISPLAY'; id: string; roomId: string };
@@ -17,6 +18,7 @@ type SocketActor = ParticipantActor | DisplayActor;
 declare module 'socket.io' { interface SocketData { actor?: SocketActor; subscribed?: boolean } }
 
 const parseCookies = (header = '') => Object.fromEntries(header.split(';').map((item) => item.trim().split('=').map(decodeURIComponent)).filter((parts) => parts.length === 2) as [string, string][]);
+const SocketAuthSchema = z.object({ displayToken: z.string().min(32).max(256).optional() });
 const envelope = (roomId: string, sequence: number, payload: unknown) => ({ schemaVersion: 1 as const, eventId: randomUUID(), roomId, sequence, serverTimestamp: new Date().toISOString(), payload });
 const sceneEnvelope = (roomId: string, sequence: number, scene: unknown) => ({ schemaVersion: 1 as const, eventId: randomUUID(), roomId, sequence, serverTimestamp: new Date().toISOString(), scene });
 
@@ -44,8 +46,10 @@ export function createRealtime(app: FastifyInstance, env: GameApiEnv) {
       if (row) return { kind: 'PARTICIPANT', id: row.id, roomId: row.roomId, role: row.role === 'HOST' ? 'HOST' : 'PARTICIPANT' };
     }
     const displayToken = cookies[COOKIE.display];
-    if (displayToken) {
-      const [row] = await app.db.select().from(displaySessions).where(and(eq(displaySessions.tokenHash, hashToken(displayToken, env.DISPLAY_SESSION_PEPPER)), isNull(displaySessions.revokedAt), gt(displaySessions.expiresAt, new Date()))).limit(1);
+    const auth = SocketAuthSchema.safeParse(socket.handshake.auth);
+    const resolvedDisplayToken = displayToken ?? (auth.success ? auth.data.displayToken : undefined);
+    if (resolvedDisplayToken) {
+      const [row] = await app.db.select().from(displaySessions).where(and(eq(displaySessions.tokenHash, hashToken(resolvedDisplayToken, env.DISPLAY_SESSION_PEPPER)), isNull(displaySessions.revokedAt), gt(displaySessions.expiresAt, new Date()))).limit(1);
       if (row) return { kind: 'DISPLAY', id: row.id, roomId: row.roomId };
     }
     return undefined;
@@ -71,17 +75,17 @@ export function createRealtime(app: FastifyInstance, env: GameApiEnv) {
       const actor = socket.data.actor;
       if (actor?.kind !== 'DISPLAY') continue;
       const snapshot = await getSnapshot(app.db, roomId, 'DISPLAY', presence);
-      if (eventName === 'display:snapshot') socket.emit(eventName, envelope(roomId, snapshot.sequence, snapshot));
+      if (eventName === 'display:snapshot' || snapshot.state === 'EXPIRED') socket.emit('display:snapshot', envelope(roomId, snapshot.sequence, snapshot));
       else socket.emit(eventName, sceneEnvelope(roomId, snapshot.sequence, toLobbyScene(snapshot, env.PUBLIC_APP_URL)));
     }
   }
   async function broadcastRoom(roomId: string, controllerEvent = 'room:snapshot') {
     await Promise.all([emitToControllers(roomId, controllerEvent), emitToDisplays(roomId)]);
   }
-  async function revokeDisplaySocket(displayId: string, roomId: string) {
+  async function revokeDisplaySocket(displayId: string, roomId: string, bump = true, reason = 'REVOKED') {
     const sockets = await io.in(`display-session:${displayId}`).fetchSockets();
-    const sequence = await bumpRoomVersion(app.db, roomId) ?? 0;
-    for (const socket of sockets) { socket.emit('display:revoked', envelope(roomId, sequence, { reason: 'REVOKED' })); socket.disconnect(true); }
+    const sequence = bump ? await bumpRoomVersion(app.db, roomId) ?? 0 : (await getSnapshot(app.db, roomId, 'DISPLAY', presence)).sequence;
+    for (const socket of sockets) { socket.emit('display:revoked', envelope(roomId, sequence, { reason })); socket.disconnect(true); }
   }
 
   io.on('connection', (socket) => {
@@ -89,7 +93,7 @@ export function createRealtime(app: FastifyInstance, env: GameApiEnv) {
       const parsed = RoomSubscribeSchema.safeParse(input);
       const actor = socket.data.actor;
       if (!parsed.success || actor?.kind !== 'PARTICIPANT' || actor.roomId !== parsed.data.roomId) return callback?.({ ok: false, code: 'FORBIDDEN' });
-      if (socket.data.subscribed) return callback?.({ ok: true });
+      if (socket.data.subscribed) { await emitToControllers(actor.roomId, 'room:snapshot'); return callback?.({ ok: true }); }
       await socket.join(`controllers:${actor.roomId}`);
       socket.data.subscribed = true;
       addPresence(participantConnections, presence.participantIds, actor.id);
@@ -109,7 +113,7 @@ export function createRealtime(app: FastifyInstance, env: GameApiEnv) {
       const parsed = DisplaySubscribeSchema.safeParse(input);
       const actor = socket.data.actor;
       if (!parsed.success || actor?.kind !== 'DISPLAY' || actor.roomId !== parsed.data.roomId || actor.id !== parsed.data.displaySessionId) return callback?.({ ok: false, code: 'FORBIDDEN' });
-      if (socket.data.subscribed) return callback?.({ ok: true });
+      if (socket.data.subscribed) { await emitToDisplays(actor.roomId, 'display:snapshot'); return callback?.({ ok: true }); }
       await Promise.all([socket.join(`displays:${actor.roomId}`), socket.join(`display-session:${actor.id}`)]);
       socket.data.subscribed = true;
       addPresence(displayConnections, presence.displayIds, actor.id);

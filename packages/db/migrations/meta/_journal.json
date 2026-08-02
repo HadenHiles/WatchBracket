@@ -15,6 +15,13 @@
       "when": 1785683627281,
       "tag": "0001_spotty_piledriver",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785686275196,
+      "tag": "0002_lucky_junta",
+      "breakpoints": true
     }
   ]
 }

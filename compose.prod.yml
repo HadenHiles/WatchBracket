@@ -96,7 +96,7 @@ services:
 
 networks:
   edge:
-    name: watchbracket_edge
+    name: ${EDGE_NETWORK_NAME:-watchbracket_edge}
     external: true
   data:
     name: watchbracket_data

@@ -43,11 +43,13 @@ export class TmdbProvider {
     if (!this.configured) throw new TmdbProviderError('NOT_CONFIGURED', 'TMDB is not configured.');
     const url = new URL(`/3${path}`, API_ORIGIN);
     for (const [key, value] of Object.entries(query)) if (value !== undefined) url.searchParams.set(key, String(value));
+    const bearerToken = this.token!.startsWith('eyJ') ? this.token : undefined;
+    if (!bearerToken) url.searchParams.set('api_key', this.token!);
     const cacheKey = url.toString(); const cached = this.cache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) return cached.value;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const response = await this.fetcher(url, { headers: { authorization: `Bearer ${this.token}`, accept: 'application/json' }, signal: AbortSignal.timeout(5_000) });
+        const response = await this.fetcher(url, { headers: { ...(bearerToken ? { authorization: `Bearer ${bearerToken}` } : {}), accept: 'application/json' }, signal: AbortSignal.timeout(5_000) });
         if (response.ok) { const value: unknown = await response.json(); this.cache.set(cacheKey, { value, expiresAt: Date.now() + METADATA_TTL_MS }); return value; }
         if (response.status !== 429 && response.status < 500) throw new TmdbProviderError('UPSTREAM_ERROR', `TMDB rejected the request (${response.status}).`);
         if (attempt === 2) throw new TmdbProviderError('UPSTREAM_ERROR', `TMDB is temporarily unavailable (${response.status}).`);

@@ -168,9 +168,12 @@ suite('Milestones 1 through 3 API against PostgreSQL', () => {
     expect((await inspector.db.select().from(matchups).where(eq(matchups.roomId, created.roomId)))).toHaveLength(9);
     expect((await app.inject({ method: 'DELETE', url: `/api/displays/${castSession.displaySessionId}`, headers: hostHeaders })).json()).toMatchObject({ revoked: true });
 
-    const revokedIssuerLaunch = await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/cast-launch-tokens`, headers: hostHeaders, payload: {} });
-    expect((await app.inject({ method: 'POST', url: '/api/auth/logout', headers: hostHeaders, payload: {} })).statusCode).toBe(200);
-    expect((await app.inject({ method: 'POST', url: '/api/displays/cast/exchange', headers: origin, payload: { launchToken: revokedIssuerLaunch.json().launchToken, protocolVersion: 1 } })).statusCode).toBe(401);
+    const adminIndependentLaunch = await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/cast-launch-tokens`, headers: hostHeaders, payload: {} });
+    expect((await app.inject({ method: 'POST', url: '/api/auth/logout', headers: mutationHeaders, payload: {} })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: '/api/displays/cast/exchange', headers: origin, payload: { launchToken: adminIndependentLaunch.json().launchToken, protocolVersion: 1 } })).statusCode).toBe(200);
+    const removedHostLaunch = await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/cast-launch-tokens`, headers: hostHeaders, payload: {} });
+    await inspector.db.update(participants).set({ removedAt: new Date() }).where(eq(participants.id, room!.hostParticipantId!));
+    expect((await app.inject({ method: 'POST', url: '/api/displays/cast/exchange', headers: origin, payload: { launchToken: removedHostLaunch.json().launchToken, protocolVersion: 1 } })).statusCode).toBe(401);
 
     await inspector.db.update(rooms).set({ expiresAt: new Date(0) }).where(eq(rooms.id, created.roomId));
     const stop = startExpirationScheduler(inspector.db, () => undefined, 10);

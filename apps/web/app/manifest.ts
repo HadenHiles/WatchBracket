@@ -1,3 +1,2 @@
 import type { MetadataRoute } from 'next';
-export default function manifest(): MetadataRoute.Manifest { return { name: 'Watch Bracket', short_name: 'Watch Bracket', description: 'Choose tonight\'s watch together.', start_url: '/', display: 'standalone', background_color: '#090912', theme_color: '#090912' }; }
-
+export default function manifest(): MetadataRoute.Manifest { return { name: 'Watch Bracket', short_name: 'Watch Bracket', description: 'Choose tonight\'s watch together.', start_url: '/', display: 'standalone', background_color: '#03123d', theme_color: '#03123d', icons: [{ src: '/brand/watch-bracket-app-icon.png', sizes: '512x512', type: 'image/png', purpose: 'any' }] }; }

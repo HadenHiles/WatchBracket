@@ -11,6 +11,8 @@ Watch Bracket is designed to join an existing Caddy and cloudflared stack. It do
 5. Validate with `docker compose config` and start with `docker compose up -d --build`.
 6. Open the public app and create a room immediately, or use **Server settings** with the bootstrap administrator to complete `/setup`. The wizard saves household defaults and reports which provider variables the isolated integration container can see.
 
+Set `PLEX_PUBLIC_URL` and `SEERR_PUBLIC_URL` to the browser-reachable HTTPS origins for those services. Keep `PLEX_BASE_URL` and `SEERR_BASE_URL` pointed at the fastest private Docker or LAN addresses. Winner actions use the public origins and never include provider credentials.
+
 Caddy routes `/api/*` and `/socket.io/*` to `game-api`, `/cast/receiver*` to the static receiver, and all other paths to `web`. The alias uses a 308 redirect to `https://bracket.famflix.live{uri}`, which preserves path and query string.
 
 After registering the Custom Web Receiver, set `CAST_RECEIVER_APP_ID` before building the web image. The registered receiver URL must be `https://bracket.famflix.live/cast/receiver/`; Cast devices cannot use localhost for the published receiver.

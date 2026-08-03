@@ -30,6 +30,17 @@ docker network create watchbracket_edge
 
 Edit the two private environment files and replace every `replace-me` value. Set `PUBLIC_APP_URL`, `PUBLIC_ALIAS_URL`, the administrator email, and any media-server credentials for your installation. Both files are ignored by Git.
 
+For winner buttons that work outside your home network, set the internal and public addresses separately:
+
+```env
+PLEX_BASE_URL=http://plex:32400
+PLEX_PUBLIC_URL=https://plex.example.com
+SEERR_BASE_URL=http://jellyseerr:5055
+SEERR_PUBLIC_URL=https://jellyseerr.example.com
+```
+
+`PLEX_PUBLIC_URL` and `SEERR_PUBLIC_URL` are safe, credential-free destinations shown to players. Tokens and API keys remain private in `.env.integration.production`.
+
 Start everything—including PostgreSQL migrations—with:
 
 ```sh
@@ -98,6 +109,6 @@ Browsers access one public origin through Caddy. Only the game API reaches Postg
 
 The Cast sender passes only a single-use launch token over the custom namespace. The receiver exchanges it once and then connects directly to the game API using an in-memory display bearer token. Set `CAST_RECEIVER_APP_ID` at web build time after completing Google Cast registration.
 
-See the [NAS quick start](docs/NAS-QUICKSTART.md), [deployment guide](docs/DEPLOYMENT.md), [backup/restore runbook](docs/BACKUP-RESTORE.md), [security model](docs/SECURITY.md), [roadmap](docs/ROADMAP.md), and complete [product specification](docs/SPEC.md).
+See the [NAS quick start](docs/NAS-QUICKSTART.md), [deployment guide](docs/DEPLOYMENT.md), [UX audit](docs/UX-AUDIT.md), [backup/restore runbook](docs/BACKUP-RESTORE.md), [security model](docs/SECURITY.md), [roadmap](docs/ROADMAP.md), and complete [product specification](docs/SPEC.md).
 
 Implementation notes are tracked per phase in [Milestone 6](docs/MILESTONE-6.md), [Milestone 7](docs/MILESTONE-7.md), [Milestone 8](docs/MILESTONE-8.md), and [Milestone 9](docs/MILESTONE-9.md).

@@ -1180,7 +1180,8 @@ export default function RoomPage() {
                         )
                       }
                     >
-                      {snapshot.tournament.activeMatchup.ownVote?.candidateId === selectedVoteId
+                      {snapshot.tournament.activeMatchup.ownVote?.candidateId &&
+                      snapshot.tournament.activeMatchup.ownVote.candidateId === selectedVoteId
                         ? `${selectedVoteTitle ?? "Pick"} locked in`
                         : selectedVoteTitle
                           ? `Vote for ${selectedVoteTitle}`

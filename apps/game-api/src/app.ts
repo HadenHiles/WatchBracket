@@ -63,6 +63,7 @@ import {
   autoStartTournament,
   extendVoting,
   processTournamentTransition,
+  refreshChampionPlexAvailability,
   skipPresentation,
   startTournament,
   submitVote,
@@ -456,7 +457,10 @@ export async function buildApp(env: GameApiEnv) {
         context,
         request.cookies[COOKIE.participant],
       );
-      if (participant?.roomId === roomId)
+      if (participant?.roomId === roomId) {
+        await refreshChampionPlexAvailability(context, roomId).catch(
+          () => undefined,
+        );
         return getSnapshot(
           app.db,
           roomId,
@@ -464,12 +468,17 @@ export async function buildApp(env: GameApiEnv) {
           realtime.presence,
           participant.id,
         );
+      }
       const display = await resolveDisplay(
         context,
         request.cookies[COOKIE.display],
       );
-      if (display?.roomId === roomId)
+      if (display?.roomId === roomId) {
+        await refreshChampionPlexAvailability(context, roomId).catch(
+          () => undefined,
+        );
         return getSnapshot(app.db, roomId, "DISPLAY", realtime.presence);
+      }
       throw new DomainError(
         "ROOM_SESSION_REQUIRED",
         "A room-scoped session is required.",

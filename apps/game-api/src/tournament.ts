@@ -28,6 +28,7 @@ import type { DomainContext } from "./domain.js";
 import { DomainError, requireRoomHost } from "./domain.js";
 import { prepareTmdbWildcards } from "./recommendations.js";
 import { ensureRoomHistory, getRoomTasteSnapshot } from "./history.js";
+import { getPlexInventory } from "./providers.js";
 
 const INTRO_SECONDS = 3,
   RESULT_SECONDS = 4;
@@ -1040,4 +1041,63 @@ export async function getTournamentData(
       loserTitle: media(result.loserId).title,
     })),
   };
+}
+
+export async function refreshChampionPlexAvailability(
+  ctx: DomainContext,
+  roomId: string,
+) {
+  const [champion] = await ctx.db
+    .select({
+      mediaItemId: mediaItems.id,
+      tmdbId: mediaItems.tmdbId,
+      mediaType: mediaItems.mediaType,
+      metadata: mediaItems.metadata,
+    })
+    .from(tournaments)
+    .innerJoin(candidates, eq(candidates.id, tournaments.championCandidateId))
+    .innerJoin(mediaItems, eq(mediaItems.id, candidates.mediaItemId))
+    .where(
+      and(
+        eq(tournaments.roomId, roomId),
+        eq(tournaments.status, "COMPLETED"),
+      ),
+    )
+    .limit(1);
+  if (!champion?.tmdbId) return false;
+
+  const metadata =
+    champion.metadata && typeof champion.metadata === "object"
+      ? (champion.metadata as Record<string, unknown>)
+      : {};
+  const current =
+    metadata.localAvailability &&
+    typeof metadata.localAvailability === "object"
+      ? (metadata.localAvailability as Record<string, unknown>)
+      : undefined;
+  if (typeof current?.plexUrl === "string" && current.plexUrl) return false;
+
+  const inventory = await getPlexInventory(ctx);
+  const local = inventory.items.find(
+    (item) =>
+      item.tmdbId === champion.tmdbId && item.mediaType === champion.mediaType,
+  );
+  if (!local?.plexUrl) return false;
+
+  await ctx.db
+    .update(mediaItems)
+    .set({
+      metadata: {
+        ...metadata,
+        localAvailability: {
+          available: true,
+          plexUrl: local.plexUrl,
+          libraryTitle: local.libraryTitle,
+          episodeCount: local.episodeCount,
+        },
+      },
+      updatedAt: new Date(),
+    })
+    .where(eq(mediaItems.id, champion.mediaItemId));
+  return true;
 }

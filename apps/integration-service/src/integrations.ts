@@ -80,7 +80,7 @@ export class PlexProvider {
     }).filter((library) => !libraryIds?.length || libraryIds.includes(library.id));
     const items: Array<z.infer<typeof PlexInventoryItemSchema>> = [];
     for (const library of libraries) {
-      const raw = object(object(await this.client.json(`/library/sections/${encodeURIComponent(library.id)}/all?type=${library.mediaType === 'MOVIE' ? 1 : 2}`))?.MediaContainer);
+      const raw = object(object(await this.client.json(`/library/sections/${encodeURIComponent(library.id)}/all?type=${library.mediaType === 'MOVIE' ? 1 : 2}&includeGuids=1`))?.MediaContainer);
       for (const entry of array(raw?.Metadata)) {
         const item = object(entry); const ratingKey = text(item?.ratingKey); const title = text(item?.title);
         if (!ratingKey || !title) continue;

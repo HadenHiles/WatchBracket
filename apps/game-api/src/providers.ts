@@ -67,6 +67,13 @@ export async function enrichWithHouseholdProviders(ctx: DomainContext, items: Ca
   });
 }
 
+export async function getPlexInventory(ctx: DomainContext) {
+  const payload = await operation(ctx, { provider: 'PLEX', operation: 'PLEX_INVENTORY', input: {} });
+  const parsed = PlexInventoryResultSchema.safeParse(payload);
+  if (!parsed.success) throw new DomainError('PLEX_INVALID_RESPONSE', 'Plex returned an invalid library inventory.', 502);
+  return parsed.data;
+}
+
 export async function requestFromSeerr(ctx: DomainContext, input: { tmdbId: number; mediaType: 'MOVIE' | 'TV'; tvSeasonPolicy?: 'FIRST' | 'LATEST' | 'ALL' }) {
   const payload = await operation(ctx, { provider: 'SEERR', operation: 'SEERR_REQUEST', input });
   const parsed = SeerrRequestResultSchema.safeParse(payload);

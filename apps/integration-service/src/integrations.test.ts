@@ -6,9 +6,11 @@ const json = (value: unknown, status = 200) => Promise.resolve(new Response(JSON
 describe('private media integrations', () => {
   it('maps Plex GUID inventory without exposing its token', async () => {
     const fetcher = vi.fn((url: URL | RequestInfo) => {
-      const path = new URL(String(url)).pathname;
+      const requestUrl = new URL(String(url));
+      const path = requestUrl.pathname;
       if (path === '/identity') return json({ MediaContainer: { machineIdentifier: 'server-1' } });
       if (path === '/library/sections') return json({ MediaContainer: { Directory: [{ key: '1', title: 'Movies', type: 'movie' }] } });
+      expect(requestUrl.searchParams.get('includeGuids')).toBe('1');
       return json({ MediaContainer: { Metadata: [{ ratingKey: '99', title: 'Dune', year: 2021, Guid: [{ id: 'tmdb://438631' }] }] } });
     });
     const result = await new PlexProvider('http://plex.local:32400', 'super-secret-token', 'https://plex.example.test', fetcher as typeof fetch).inventory();

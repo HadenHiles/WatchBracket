@@ -29,15 +29,6 @@ describe('private media integrations', () => {
     expect(JSON.stringify(result)).not.toContain('private-user');
   });
 
-  it('builds only server-controlled Seerr request fields', async () => {
-    const fetcher = vi.fn((_url: URL | RequestInfo, init?: RequestInit) => {
-      expect(JSON.parse(String(init?.body))).toEqual({ mediaType: 'tv', mediaId: 1399, seasons: [1] });
-      return json({ id: 42, media: { status: 2 } });
-    });
-    const result = await new SeerrProvider('http://seerr.local', 'secret-key', undefined, fetcher as typeof fetch).request({ tmdbId: 1399, mediaType: 'TV', tvSeasonPolicy: 'FIRST' });
-    expect(result).toEqual({ requestId: 42, status: 'PENDING' });
-  });
-
   it('provides a credential-free direct Jellyseerr title link', async () => {
     const fetcher = vi.fn(() => json({ mediaInfo: { status: 1 } }));
     const result = await new SeerrProvider('http://seerr.internal', 'secret-key', 'https://seerr.example.test', fetcher as typeof fetch)
@@ -49,16 +40,4 @@ describe('private media integrations', () => {
     expect(result[0]?.requestUrl).not.toContain('secret-key');
   });
 
-  it('resolves the latest TV season before creating a Seerr request', async () => {
-    const fetcher = vi.fn((url: URL | RequestInfo, init?: RequestInit) => {
-      if (new URL(String(url)).pathname === '/api/v1/tv/1399') {
-        return json({ seasons: [{ seasonNumber: 0 }, { seasonNumber: 1 }, { seasonNumber: 4 }] });
-      }
-      expect(JSON.parse(String(init?.body))).toEqual({ mediaType: 'tv', mediaId: 1399, seasons: [4] });
-      return json({ id: 43, media: { status: 2 } });
-    });
-    const result = await new SeerrProvider('http://seerr.local', 'secret-key', undefined, fetcher as typeof fetch).request({ tmdbId: 1399, mediaType: 'TV', tvSeasonPolicy: 'LATEST' });
-    expect(result).toEqual({ requestId: 43, status: 'PENDING' });
-    expect(fetcher).toHaveBeenCalledTimes(2);
-  });
 });

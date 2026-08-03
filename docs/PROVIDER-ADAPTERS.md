@@ -22,4 +22,4 @@ Candidate data must continue through the common eligibility evaluator. An adapte
 - TMDB: public catalog identity, metadata, artwork, recommendations, and regional JustWatch offers.
 - Plex: local libraries and inventory normalized to TMDB GUIDs; tokens never appear in playback links.
 - Tautulli: raw rows reduced to aggregate household title counts inside the private service.
-- Seerr-compatible: capability/status reads and a host-confirmed canonical-winner request with a server-controlled TV season policy.
+- Seerr-compatible: capability/status reads and credential-free title links. Seerr owns sign-in, permissions, quotas, season selection, and request attribution.

@@ -146,9 +146,7 @@ export default function RoomPage() {
   const [format, setFormat] = useState<8 | 12 | 16>(8);
   const [voteDuration, setVoteDuration] = useState(30);
   const [selectedVoteId, setSelectedVoteId] = useState<string>();
-  const [winnerActionMessage, setWinnerActionMessage] = useState("");
-  const [tvSeasonPolicy, setTvSeasonPolicy] = useState<"FIRST" | "LATEST" | "ALL">("FIRST");
-  const [winnerActionPending, setWinnerActionPending] = useState(false);
+  const [replayPending, setReplayPending] = useState(false);
   const [effectsEnabled, setEffectsEnabled] = useState(false);
   const [displayWinnerView, setDisplayWinnerView] = useState<"AUTO" | "PODIUM" | "BRACKET">("AUTO");
   const [objectionGoldId, setObjectionGoldId] = useState<string>();
@@ -403,26 +401,12 @@ export default function RoomPage() {
       );
     }
   }
-  async function requestWinner() {
-    if (!window.confirm("Send this winning title to Seerr now?")) return;
-    setWinnerActionPending(true); setWinnerActionMessage("");
-    try {
-      const champion = snapshot?.tournament?.champion;
-      const result = await api<{ requested: boolean; status: string }>(`/api/rooms/${roomId}/winner/request`, {
-        method: "POST",
-        body: JSON.stringify({ confirm: true, ...(champion?.mediaType === "TV" ? { tvSeasonPolicy } : {}) }),
-      });
-      setWinnerActionMessage(result.requested ? `Request verified · ${result.status.toLowerCase()}` : "Request was not accepted.");
-      await load();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not request winner"); }
-    finally { setWinnerActionPending(false); }
-  }
   async function replay() {
-    setWinnerActionPending(true);
+    setReplayPending(true);
     try {
       const result = await api<{ roomId: string }>(`/api/rooms/${roomId}/run-it-back`, { method: "POST", body: "{}" });
       router.replace(`/room/${result.roomId}`);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not create replay room"); setWinnerActionPending(false); }
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not create replay room"); setReplayPending(false); }
   }
   async function assignPick(rank: 1 | 2, catalogKey: string) {
     if (snapshot?.viewerReady) {
@@ -1341,12 +1325,7 @@ export default function RoomPage() {
                   {snapshot.tournament.champion.localAvailability?.plexUrl && <a className="button-link winner-primary-action" href={snapshot.tournament.champion.localAvailability.plexUrl} target="_blank" rel="noreferrer" onClick={openPlexApp}>▶ Watch now on Plex</a>}
                   {!snapshot.tournament.champion.localAvailability?.plexUrl && snapshot.tournament.champion.requestAvailability?.requestUrl && <a className="button-link winner-primary-action" href={snapshot.tournament.champion.requestAvailability.requestUrl} target="_blank" rel="noreferrer">Open in Jellyseerr to request</a>}
                   {!snapshot.tournament.champion.localAvailability?.plexUrl && !snapshot.tournament.champion.requestAvailability?.requestUrl && snapshot.tournament.champion.availability?.link && <a className="button-link winner-primary-action" href={snapshot.tournament.champion.availability.link} target="_blank" rel="noreferrer">View streaming options</a>}
-                  {snapshot.tournament.champion.requestAvailability?.requestable && host && <>
-                    {snapshot.tournament.champion.mediaType === "TV" && <label>TV season request<select value={tvSeasonPolicy} onChange={(event)=>setTvSeasonPolicy(event.target.value as typeof tvSeasonPolicy)}><option value="FIRST">Season 1</option><option value="LATEST">Latest season</option><option value="ALL">All seasons</option></select></label>}
-                    <button className="secondary" disabled={winnerActionPending} onClick={()=>void requestWinner()}>{winnerActionPending ? "Requesting…" : "Request now via Jellyseerr"}</button>
-                  </>}
-                  {host && <button className="secondary" disabled={winnerActionPending} onClick={()=>void replay()}>Run It Back</button>}
-                  {winnerActionMessage && <p className="notice" role="status">{winnerActionMessage}</p>}
+                  {host && <button className="secondary" disabled={replayPending} onClick={()=>void replay()}>{replayPending ? "Starting…" : "Run It Back"}</button>}
                 </div>
               </div>}
               <div className="winner-path"><h2>Winner Journey</h2>{snapshot.tournament.bracket.filter((result)=>result.winnerId===snapshot.tournament!.champion!.id).map((result)=><span className="provider-badge" key={result.key}>Defeated {result.loserTitle}</span>)}</div>

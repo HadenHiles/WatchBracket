@@ -6,13 +6,10 @@ import Fastify, { type FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
   auditEvents,
-  candidates,
   createDatabase,
-  mediaItems,
   participantPlexAccounts,
   participants,
   rooms,
-  tournaments,
 } from "@watch-bracket/db";
 import { HouseRulesSchema } from "@watch-bracket/realtime-protocol";
 import {
@@ -72,7 +69,6 @@ import {
 import { getRecommendationDebug } from "./recommendations.js";
 import {
   getPlexAuthStatus,
-  requestFromSeerr,
   startPlexAuth,
   unlinkPlex,
 } from "./providers.js";
@@ -133,10 +129,6 @@ const VoteSchema = z
   .refine((value) => value.abstain !== Boolean(value.candidateId), {
     message: "Choose a candidate or abstain.",
   });
-const WinnerRequestSchema = z.object({
-  confirm: z.literal(true),
-  tvSeasonPolicy: z.enum(["FIRST", "LATEST", "ALL"]).optional(),
-});
 const WinnerDisplayModeSchema = z.object({
   mode: z.enum(["PODIUM", "BRACKET"]),
 });
@@ -976,85 +968,6 @@ export async function buildApp(env: GameApiEnv) {
         completed: result.completed,
         ballotsReceived: result.objection.ballots.length,
         eligibleVoters: result.objection.eligibleParticipantIds.length,
-      };
-    },
-  );
-  app.post(
-    "/api/rooms/:roomId/winner/request",
-    { config: { rateLimit: { max: 3, timeWindow: "1 hour" } } },
-    async (request) => {
-      await mutationGuard(request);
-      const { roomId } = parse(ParamsRoomSchema, request.params);
-      const input = parse(WinnerRequestSchema, request.body);
-      const participant = await resolveParticipant(
-        context,
-        request.cookies[COOKIE.participant],
-      );
-      if (
-        !participant ||
-        participant.roomId !== roomId ||
-        participant.role !== "HOST"
-      )
-        throw new DomainError(
-          "HOST_REQUIRED",
-          "Only the room host can request the winning title.",
-          403,
-        );
-      const [winner] = await app.db
-        .select({
-          householdId: rooms.householdId,
-          state: rooms.state,
-          mediaType: mediaItems.mediaType,
-          tmdbId: mediaItems.tmdbId,
-          title: mediaItems.title,
-        })
-        .from(rooms)
-        .innerJoin(tournaments, eq(tournaments.roomId, rooms.id))
-        .innerJoin(
-          candidates,
-          eq(candidates.id, tournaments.championCandidateId),
-        )
-        .innerJoin(mediaItems, eq(mediaItems.id, candidates.mediaItemId))
-        .where(eq(rooms.id, roomId))
-        .limit(1);
-      if (!winner || winner.state !== "WINNER" || !winner.tmdbId)
-        throw new DomainError(
-          "WINNER_NOT_REQUESTABLE",
-          "A canonical winning title is required before requesting media.",
-          409,
-        );
-      if (winner.mediaType === "TV" && !input.tvSeasonPolicy)
-        throw new DomainError(
-          "TV_SEASON_POLICY_REQUIRED",
-          "Choose which TV seasons to request.",
-          400,
-        );
-      const result = await requestFromSeerr(context, {
-        tmdbId: winner.tmdbId,
-        mediaType: winner.mediaType,
-        ...(input.tvSeasonPolicy
-          ? { tvSeasonPolicy: input.tvSeasonPolicy }
-          : {}),
-      });
-      await app.db
-        .insert(auditEvents)
-        .values({
-          householdId: winner.householdId,
-          roomId,
-          actorType: "PARTICIPANT",
-          actorId: participant.id,
-          eventType: "WINNER_MEDIA_REQUESTED",
-          metadata: {
-            mediaType: winner.mediaType,
-            title: winner.title,
-            requestId: result.requestId,
-            tvSeasonPolicy: input.tvSeasonPolicy ?? null,
-          },
-        });
-      return {
-        requested: true,
-        requestId: result.requestId,
-        status: result.status,
       };
     },
   );

@@ -71,8 +71,7 @@ app.post('/internal/providers/operation', async (request, reply) => {
     }
     if (parsed.data.operation === 'PLEX_UNLINK') return { ok: true, provider: 'PLEX', operation: 'PLEX_UNLINK', ...await participantPlex.unlink(parsed.data.input.participantId) };
     if (parsed.data.operation === 'TAUTULLI_HISTORY') return { ok: true, provider: 'TAUTULLI', operation: 'TAUTULLI_HISTORY', ...await tautulli.history(parsed.data.input.limit) };
-    if (parsed.data.operation === 'SEERR_STATUS') return { ok: true, provider: 'SEERR', operation: 'SEERR_STATUS', items: await seerr.statuses(parsed.data.input.items) };
-    return { ok: true, provider: 'SEERR', operation: 'SEERR_REQUEST', ...await seerr.request(parsed.data.input) };
+    return { ok: true, provider: 'SEERR', operation: 'SEERR_STATUS', items: await seerr.statuses(parsed.data.input.items) };
   } catch (error) {
     const providerError = error instanceof TmdbProviderError || error instanceof IntegrationProviderError ? error : new IntegrationProviderError('UPSTREAM_ERROR', 'Provider operation failed.');
     const status = providerError.code === 'NOT_CONFIGURED' ? 503 : providerError.code === 'UPSTREAM_TIMEOUT' ? 504 : 502;

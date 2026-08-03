@@ -32,7 +32,7 @@ The V1 product should answer one question exceptionally well:
 
 > What can this group agree to watch tonight?
 
-The experience must feel fast, playful, fair, polished, and trustworthy. Availability must never be a surprise. Recommendations must be explainable. The final winner must lead directly to a useful next action, such as opening Plex or confirming a Seerr request.
+The experience must feel fast, playful, fair, polished, and trustworthy. Availability must never be a surprise. Recommendations must be explainable. The final winner must lead directly to a useful next action, such as opening Plex or the title in Seerr.
 
 ## 2. Final V1 Scope Decision
 
@@ -1629,7 +1629,6 @@ DELETE /api/rooms/:roomId/participants/:participantId
 POST   /api/rooms/:roomId/co-hosts/:participantId
 POST   /api/rooms/:roomId/displays/pairing-code
 POST   /api/rooms/:roomId/displays/:displaySessionId/revoke
-POST   /api/rooms/:roomId/winner/request
 POST   /api/rooms/:roomId/run-it-back
 ```
 

@@ -157,22 +157,4 @@ export class SeerrProvider {
     }));
     return values;
   }
-  async request(input: { tmdbId: number; mediaType: 'MOVIE' | 'TV'; tvSeasonPolicy?: 'FIRST' | 'LATEST' | 'ALL' | undefined }) {
-    const payload: Record<string, unknown> = { mediaType: input.mediaType === 'MOVIE' ? 'movie' : 'tv', mediaId: input.tmdbId };
-    if (input.mediaType === 'TV') {
-      if (input.tvSeasonPolicy === 'ALL') payload.seasons = 'all';
-      else if (input.tvSeasonPolicy === 'LATEST') {
-        const details = object(await this.client.json(`/api/v1/tv/${input.tmdbId}`));
-        const seasonNumbers = array(details?.seasons)
-          .map((season) => integer(object(season)?.seasonNumber ?? object(season)?.season_number))
-          .filter((season): season is number => season !== undefined && season > 0);
-        const latest = seasonNumbers.length ? Math.max(...seasonNumbers) : integer(details?.numberOfSeasons);
-        if (!latest || latest < 1) throw new IntegrationProviderError('INVALID_RESPONSE', 'Seerr did not return a requestable latest season.');
-        payload.seasons = [latest];
-      } else payload.seasons = [1];
-    }
-    const raw = object(await this.client.json('/api/v1/request', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }));
-    const id = integer(raw?.id); if (!id) throw new IntegrationProviderError('INVALID_RESPONSE', 'Seerr returned an invalid request record.');
-    return { requestId: id, status: seerrStatus(object(raw?.media)?.status ?? raw?.status) };
-  }
 }

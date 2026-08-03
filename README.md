@@ -16,6 +16,10 @@ Watch Bracket is a self-hosted, real-time party game for turning “what should 
 | --- | --- |
 | ![Watch Bracket shared display](docs/assets/demo-display.png) | ![Watch Bracket animated winner podium](docs/assets/demo-winner.png) |
 
+| Challenge a close call | Watch the podium go into overtime |
+| --- | --- |
+| ![Watch Bracket Gold and Silver objection ballot](docs/assets/demo-objection.png) | ![Watch Bracket shared-display objection overtime](docs/assets/demo-objection-display.png) |
+
 ## Docker NAS quick start
 
 Install Docker Engine with Docker Compose, then:

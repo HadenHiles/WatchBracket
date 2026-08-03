@@ -1,6 +1,6 @@
 "use client";
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import { io, type Socket } from "socket.io-client";
@@ -14,6 +14,7 @@ import {
 } from "@watch-bracket/realtime-protocol";
 import { api } from "../../../lib/api";
 import { useCast } from "../../../lib/use-cast";
+import { isMobileBrowser, plexAppDeepLink } from "../../../lib/plex-link";
 import { BrandLogo } from "../../../components/brand-logo";
 import { EliminationBracket } from "@watch-bracket/display-ui";
 
@@ -470,8 +471,14 @@ export default function RoomPage() {
     const participantId = snapshot?.viewerParticipantId;
     if (participantId) {
       const key = `watch-bracket:plex:${participantId}`;
-      if (status.connected) window.sessionStorage.setItem(key, status.accountLabel ?? "Plex connected");
-      else window.sessionStorage.removeItem(key);
+      if (status.connected) {
+        const label = status.accountLabel ?? "Plex connected";
+        window.sessionStorage.setItem(key, label);
+        window.sessionStorage.setItem("watch-bracket:plex:session", label);
+      } else {
+        window.sessionStorage.removeItem(key);
+        window.sessionStorage.removeItem("watch-bracket:plex:session");
+      }
     }
     if (status.connected && loadSuggestions) await loadPlexWatchlist();
     return status.connected;
@@ -514,6 +521,7 @@ export default function RoomPage() {
       setPlexRecommendations([]);
       setPlexMessage("Plex disconnected from this room profile.");
       if (snapshot?.viewerParticipantId) window.sessionStorage.removeItem(`watch-bracket:plex:${snapshot.viewerParticipantId}`);
+      window.sessionStorage.removeItem("watch-bracket:plex:session");
     } catch (reason) {
       setPlexMessage(reason instanceof Error ? reason.message : "Could not disconnect Plex.");
     }
@@ -533,6 +541,19 @@ export default function RoomPage() {
   const revealed = snapshot.state === "NOMINATIONS_LOCKED";
   const champion = snapshot.tournament?.champion;
   const winnerActionUrl = champion?.localAvailability?.plexUrl ?? champion?.requestAvailability?.requestUrl ?? champion?.availability?.link ?? window.location.href;
+  function openPlexApp(event: ReactMouseEvent<HTMLAnchorElement>) {
+    const webUrl = champion?.localAvailability?.plexUrl;
+    const appUrl = plexAppDeepLink(webUrl, champion?.mediaType ?? "MOVIE");
+    if (!webUrl || !appUrl || !isMobileBrowser(window.navigator.userAgent)) return;
+    event.preventDefault();
+    const fallback = window.setTimeout(() => {
+      if (document.visibilityState === "visible") window.location.assign(webUrl);
+    }, 1400);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") window.clearTimeout(fallback);
+    }, { once: true });
+    window.location.assign(appUrl);
+  }
   const canStartCast = cast.state === "ready";
   const castButtonLabel =
     cast.state === "loading"
@@ -1317,7 +1338,7 @@ export default function RoomPage() {
               {snapshot.tournament.objection?.status !== "OPEN" && <div className="winner-actions">
                 <div className="qr-frame"><QRCodeSVG value={winnerActionUrl} size={142} fgColor="#06194d" bgColor="#fffdf0" /></div>
                 <div className="stack">
-                  {snapshot.tournament.champion.localAvailability?.plexUrl && <a className="button-link winner-primary-action" href={snapshot.tournament.champion.localAvailability.plexUrl} target="_blank" rel="noreferrer">▶ Watch now on Plex</a>}
+                  {snapshot.tournament.champion.localAvailability?.plexUrl && <a className="button-link winner-primary-action" href={snapshot.tournament.champion.localAvailability.plexUrl} target="_blank" rel="noreferrer" onClick={openPlexApp}>▶ Watch now on Plex</a>}
                   {!snapshot.tournament.champion.localAvailability?.plexUrl && snapshot.tournament.champion.requestAvailability?.requestUrl && <a className="button-link winner-primary-action" href={snapshot.tournament.champion.requestAvailability.requestUrl} target="_blank" rel="noreferrer">Open in Jellyseerr to request</a>}
                   {!snapshot.tournament.champion.localAvailability?.plexUrl && !snapshot.tournament.champion.requestAvailability?.requestUrl && snapshot.tournament.champion.availability?.link && <a className="button-link winner-primary-action" href={snapshot.tournament.champion.availability.link} target="_blank" rel="noreferrer">View streaming options</a>}
                   {snapshot.tournament.champion.requestAvailability?.requestable && host && <>

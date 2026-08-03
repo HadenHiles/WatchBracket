@@ -9,6 +9,7 @@ import {
   candidates,
   createDatabase,
   mediaItems,
+  participantPlexAccounts,
   participants,
   rooms,
   tournaments,
@@ -193,6 +194,28 @@ export async function buildApp(env: GameApiEnv) {
   let stopScheduler: (() => void) | undefined;
 
   const context = { db: database.db, env };
+  const carryPlexConnection = async (
+    sourceParticipantId: string | undefined,
+    targetParticipantId: string | undefined,
+  ) => {
+    if (!sourceParticipantId || !targetParticipantId || sourceParticipantId === targetParticipantId)
+      return;
+    const [account] = await app.db
+      .select()
+      .from(participantPlexAccounts)
+      .where(eq(participantPlexAccounts.participantId, sourceParticipantId))
+      .limit(1);
+    if (!account?.encryptedToken) return;
+    await app.db
+      .insert(participantPlexAccounts)
+      .values({
+        participantId: targetParticipantId,
+        encryptedToken: account.encryptedToken,
+        accountLabel: account.accountLabel,
+        connectedAt: account.connectedAt ?? new Date(),
+      })
+      .onConflictDoNothing({ target: participantPlexAccounts.participantId });
+  };
   const mutationGuard = async (request: FastifyRequest, requireCsrf = true) => {
     if (!allowedOrigin(request.headers.origin, env))
       throw new DomainError(
@@ -367,12 +390,18 @@ export async function buildApp(env: GameApiEnv) {
         `room-create:${idempotencyKey}`,
         env.PARTICIPANT_SESSION_PEPPER,
       );
+      const previousParticipant = await resolveParticipant(
+        context,
+        request.cookies[COOKIE.participant],
+      );
       const created = await createRoom(
         context,
         creatorIdentifier,
         body,
         idempotencyKey,
       );
+      if (!created.replayed && "participant" in created)
+        await carryPlexConnection(previousParticipant?.id, created.participant.id);
       if (!created.replayed && "token" in created)
         reply.setCookie(COOKIE.participant, created.token, cookieOptions(env));
       const [room] = await app.db
@@ -422,11 +451,16 @@ export async function buildApp(env: GameApiEnv) {
     { config: { rateLimit: { max: 15, timeWindow: "1 minute" } } },
     async (request, reply) => {
       await mutationGuard(request, false);
+      const previousParticipant = await resolveParticipant(
+        context,
+        request.cookies[COOKIE.participant],
+      );
       const joined = await joinRoom(
         context,
         parse(JoinRoomSchema, request.body),
         request.cookies[COOKIE.participant],
       );
+      await carryPlexConnection(previousParticipant?.id, joined.participant.id);
       if (joined.token)
         reply.setCookie(COOKIE.participant, joined.token, cookieOptions(env));
       issueCsrf(reply, env);

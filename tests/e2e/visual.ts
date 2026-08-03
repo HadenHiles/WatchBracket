@@ -15,8 +15,5 @@ export async function settleForScreenshot(page: Page) {
       await image.decode().catch(() => undefined);
     }));
   });
-  await page.addStyleTag({
-    content: '*,*::before,*::after{animation-play-state:paused!important;caret-color:transparent!important}',
-  });
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(900);
 }

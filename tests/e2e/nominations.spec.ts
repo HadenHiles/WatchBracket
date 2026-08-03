@@ -52,8 +52,10 @@ test('nominations keep picks pinned and contenders private by default', async ({
     makePicks(guestThree, 'Alien'),
   ]);
   if (captureDocs) {
+    await host.setViewportSize({ width: 1280, height: 900 });
+    await host.locator('.nomination-dock').scrollIntoViewIfNeeded();
     await settleForScreenshot(host);
-    await host.screenshot({ path: 'docs/assets/demo-nominations.png', fullPage: true });
+    await host.screenshot({ path: 'docs/assets/demo-nominations.png' });
   }
   await host.getByRole('button', { name: 'Edit picks' }).click();
   await host.getByRole('button', { name: 'Reveal now' }).click();
@@ -71,8 +73,9 @@ test('nominations keep picks pinned and contenders private by default', async ({
   await expect(host.getByRole('button', { name: 'Choose a poster' })).toBeVisible();
   await expect(guest.getByRole('button', { name: 'Choose a poster' })).toBeVisible();
   if (captureDocs) {
+    await host.locator('.tournament-controller').scrollIntoViewIfNeeded();
     await settleForScreenshot(host);
-    await host.screenshot({ path: 'docs/assets/demo-voting.png', fullPage: true });
+    await host.screenshot({ path: 'docs/assets/demo-voting.png' });
   }
 
   for (let matchup = 1; matchup <= 9; matchup += 1) {
@@ -92,8 +95,10 @@ test('nominations keep picks pinned and contenders private by default', async ({
   await expect(host.locator('.controller-confetti i')).toHaveCount(32);
   await expect(host.getByRole('link', { name: /Watch now on Plex|Open in Jellyseerr to request/ })).toBeVisible();
   if (captureDocs) {
+    await host.setViewportSize({ width: 1280, height: 1000 });
+    await host.locator('.winner-controller').scrollIntoViewIfNeeded();
     await settleForScreenshot(host);
-    await host.screenshot({ path: 'docs/assets/demo-winner.png', fullPage: true });
+    await host.screenshot({ path: 'docs/assets/demo-winner.png' });
   }
 
   await Promise.all([

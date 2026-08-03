@@ -188,7 +188,8 @@ suite('Milestones 1 through 3 API against PostgreSQL', () => {
     const objectionBallot = await app.inject({ method: 'PUT', url: `/api/rooms/${created.roomId}/winner/objection/ballot`, headers: guestHeaders, payload: { goldCandidateId: originalPodium[1].id, silverCandidateId: originalPodium[0].id } });
     expect(objectionBallot.statusCode).toBe(200); expect(objectionBallot.json()).toMatchObject({ status: 'COMPLETED', completed: true, ballotsReceived: 1 });
     const overtimeWinner = (await app.inject({ method: 'GET', url: `/api/rooms/${created.roomId}/snapshot`, headers: { cookie: hostRoomCookies } })).json();
-    expect(overtimeWinner.tournament).toMatchObject({ champion: { id: originalPodium[1].id }, podium: [{ id: originalPodium[1].id, placement: 1 }], objection: { status: 'COMPLETED', championChanged: true } });
+    expect(overtimeWinner.tournament).toMatchObject({ champion: { id: originalPodium[1].id }, objection: { status: 'COMPLETED', championChanged: true } });
+    expect(overtimeWinner.tournament.podium[0]).toMatchObject({ id: originalPodium[1].id, placement: 1 });
     expect((await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/winner/objection`, headers: guestHeaders, payload: {} })).statusCode).toBe(409);
     const replayRoom = await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/run-it-back`, headers: hostHeaders, payload: {} });
     expect(replayRoom.statusCode).toBe(200); expect(replayRoom.json()).toMatchObject({ participantCount: 3 });

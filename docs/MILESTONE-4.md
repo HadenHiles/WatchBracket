@@ -12,7 +12,9 @@ The pure `@watch-bracket/tournament-engine` package supports the fixed Double-Ta
 | 12 titles | 6 | 3 | 2 semis + final | 2 semis + final | 15 |
 | 16 titles | 8 | 4 | 2 returns | 2 play-ins + 2 semis + final | 19 |
 
-Opening seeds are deterministic for the stored room seed. Pairing avoids shared nominators and shared franchise keys when possible, then uses balanced outer seeding. Qualifier losers are ranked for redemption by vote share, supporter count, first-choice count, and seed.
+Opening seeds are deterministic for the stored room seed. Pairing avoids shared nominators and shared franchise keys when possible, then uses balanced outer seeding. Direct nominations receive three rank points for a first choice and two for a second choice. Unique supporter count remains the primary seed signal, with ranked interest breaking otherwise similar support.
+
+Qualifier redemption is deliberately overlap-first: broad ranked group interest, unique supporter count, qualifier vote share, stored candidate score, then seed. A highly shared title therefore receives a meaningful second chance even if an unlucky opening pairing produces a decisive loss.
 
 ## Durable orchestration
 
@@ -31,11 +33,11 @@ Each transition locks the room and tournament rows. Matchups have unique engine 
 - One row per participant and matchup; resubmission updates that row.
 - Explicit abstention stores no candidate ID.
 - Server time rejects late votes.
-- Eligibility is captured when the matchup is created, so a temporary disconnect does not remove a voter.
+- Eligibility is captured when the matchup is created, so a temporary disconnect does not remove a voter. A late joiner is appended while the intro or voting window is still open and is eligible for every later matchup.
 - Displays receive completion counts, never live splits or participant choices.
 - Hosts vote like every other eligible participant and cannot force a winner.
 
-Ties use unique nominators, first-choice nominations, pre-tournament score, then a reproducible room-seeded coin flip. Abstention and no-response totals are retained in the resolution; because abstention is not assigned to either candidate, it cannot distinguish the two sides of a tied matchup.
+Live ballot majorities remain authoritative. Ties first compare the group-interest score (`2 × unique supporters + first-choice supporters`), which is equivalent to weighting first choices at three points and second choices at two. Exact interest ties then use unique nominators, first-choice nominations, pre-tournament score, and finally a reproducible room-seeded coin flip. Abstention and no-response totals are retained in the resolution; because abstention is not assigned to either candidate, it cannot distinguish the two sides of a tied matchup.
 
 ## Presentation sequence
 

@@ -5,7 +5,7 @@ export type TournamentStage = 'QUALIFIER' | 'SPOTLIGHT' | 'REDEMPTION' | 'REDEMP
 export type EngineCandidate = { id: string; seed: number; score: number; supportCount: number; firstChoiceCount: number; nominatorIds: string[]; franchiseKey?: string };
 export type EngineMatchup = { key: string; stage: TournamentStage; sequence: number; candidateAId: string; candidateBId: string };
 export type EngineResult = { matchup: EngineMatchup; winnerId: string; loserId: string; votesA: number; votesB: number; abstentions: number; tieBreak: TieBreakReason | null };
-export type TieBreakReason = 'UNIQUE_NOMINATORS' | 'FIRST_CHOICES' | 'PRE_TOURNAMENT_SCORE' | 'SEEDED_COIN_FLIP';
+export type TieBreakReason = 'GROUP_INTEREST_SCORE' | 'UNIQUE_NOMINATORS' | 'FIRST_CHOICES' | 'PRE_TOURNAMENT_SCORE' | 'SEEDED_COIN_FLIP';
 export type TournamentState = {
   schemaVersion: 1; format: TournamentFormat; roomSeed: string; candidates: EngineCandidate[]; stage: TournamentStage; pending: EngineMatchup[]; completed: EngineResult[];
   strikes: Record<string, number>; qualifierWinners: string[]; qualifierLosers: string[]; spotlightWinners: string[]; redemptionWinners: string[]; playInWinners: string[]; semifinalWinners: string[]; championshipByes: string[]; championId: string | null;
@@ -17,6 +17,8 @@ const bySeed = (state: TournamentState, ids: string[]) => [...ids].sort((a,b)=>(
 const candidate = (state: TournamentState, id: string) => { const found=state.candidates.find((item)=>item.id===id); if(!found)throw new Error(`Unknown candidate ${id}`); return found; };
 const expectedMatchups: Record<TournamentFormat, number> = { 8: 9, 12: 15, 16: 19 };
 export const totalMatchups = (format: TournamentFormat) => expectedMatchups[format];
+export const groupInterestScore = (item: Pick<EngineCandidate, 'supportCount' | 'firstChoiceCount'>) =>
+  item.supportCount * 2 + item.firstChoiceCount;
 
 export function seedCandidates(input: Omit<EngineCandidate,'seed'>[], roomSeed: string): EngineCandidate[] {
   return [...input].sort((a,b)=>b.supportCount-a.supportCount||b.firstChoiceCount-a.firstChoiceCount||b.score-a.score||digest(`${roomSeed}:${a.id}`).localeCompare(digest(`${roomSeed}:${b.id}`))).map((item,index)=>({...item,seed:index+1}));
@@ -45,8 +47,8 @@ export function createTournament(input: Omit<EngineCandidate,'seed'>[], format: 
   state.pending=makeMatchups(state,'QUALIFIER',openingPairs(candidates)); return state;
 }
 
-function redemptionRanking(state: TournamentState) {
-  return [...state.qualifierLosers].sort((a,b)=>{const resultA=state.completed.find((item)=>item.matchup.stage==='QUALIFIER'&&item.loserId===a)!;const resultB=state.completed.find((item)=>item.matchup.stage==='QUALIFIER'&&item.loserId===b)!;const shareA=(resultA.votesA+resultA.votesB)?Math.min(resultA.votesA,resultA.votesB)/(resultA.votesA+resultA.votesB):0;const shareB=(resultB.votesA+resultB.votesB)?Math.min(resultB.votesA,resultB.votesB)/(resultB.votesA+resultB.votesB):0;const candidateA=candidate(state,a),candidateB=candidate(state,b);return shareB-shareA||candidateB.supportCount-candidateA.supportCount||candidateB.firstChoiceCount-candidateA.firstChoiceCount||candidateA.seed-candidateB.seed;});
+export function rankRedemptionCandidates(state: TournamentState) {
+  return [...state.qualifierLosers].sort((a,b)=>{const resultA=state.completed.find((item)=>item.matchup.stage==='QUALIFIER'&&item.loserId===a)!;const resultB=state.completed.find((item)=>item.matchup.stage==='QUALIFIER'&&item.loserId===b)!;const shareA=(resultA.votesA+resultA.votesB)?Math.min(resultA.votesA,resultA.votesB)/(resultA.votesA+resultA.votesB):0;const shareB=(resultB.votesA+resultB.votesB)?Math.min(resultB.votesA,resultB.votesB)/(resultB.votesA+resultB.votesB):0;const candidateA=candidate(state,a),candidateB=candidate(state,b);return groupInterestScore(candidateB)-groupInterestScore(candidateA)||candidateB.supportCount-candidateA.supportCount||shareB-shareA||candidateB.score-candidateA.score||candidateA.seed-candidateB.seed;});
 }
 
 function beginChampionship(state: TournamentState) {
@@ -58,7 +60,7 @@ function beginChampionship(state: TournamentState) {
 
 function advanceStage(state: TournamentState) {
   if(state.stage==='QUALIFIER'){state.stage='SPOTLIGHT';state.pending=makeMatchups(state,state.stage,outerPairs(state,state.qualifierWinners));return;}
-  if(state.stage==='SPOTLIGHT'){const count=state.format===8?2:4;const redemption=redemptionRanking(state).slice(0,count);state.stage='REDEMPTION';state.pending=makeMatchups(state,state.stage,outerPairs(state,redemption));return;}
+  if(state.stage==='SPOTLIGHT'){const count=state.format===8?2:4;const redemption=rankRedemptionCandidates(state).slice(0,count);state.stage='REDEMPTION';state.pending=makeMatchups(state,state.stage,outerPairs(state,redemption));return;}
   if(state.stage==='REDEMPTION'&&state.format===12){state.stage='REDEMPTION_FINAL';state.pending=makeMatchups(state,state.stage,[[state.redemptionWinners[0]!,state.redemptionWinners[1]!]]);state.redemptionWinners=[];return;}
   if(state.stage==='REDEMPTION'||state.stage==='REDEMPTION_FINAL'){beginChampionship(state);return;}
   if(state.stage==='CHAMPIONSHIP_PLAY_IN'&&state.format===8){state.stage='CHAMPIONSHIP_FINAL';state.pending=makeMatchups(state,state.stage,[[state.championshipByes[0]!,state.playInWinners[0]!]]);return;}
@@ -82,7 +84,7 @@ export function advanceTournament(input: TournamentState, resolution: Omit<Engin
 export function resolveBallots(input:{candidateA:EngineCandidate;candidateB:EngineCandidate;ballots:Ballot[];roomSeed:string;matchupKey:string}) {
   const votesA=input.ballots.filter((vote)=>!vote.abstained&&vote.candidateId===input.candidateA.id).length;const votesB=input.ballots.filter((vote)=>!vote.abstained&&vote.candidateId===input.candidateB.id).length;const abstentions=input.ballots.filter((vote)=>vote.abstained).length;
   if(votesA!==votesB){const winner=votesA>votesB?input.candidateA:input.candidateB;return{winnerId:winner.id,loserId:winner.id===input.candidateA.id?input.candidateB.id:input.candidateA.id,votesA,votesB,abstentions,tieBreak:null as TieBreakReason|null};}
-  const comparisons:Array<[TieBreakReason,number,number]>=[['UNIQUE_NOMINATORS',input.candidateA.supportCount,input.candidateB.supportCount],['FIRST_CHOICES',input.candidateA.firstChoiceCount,input.candidateB.firstChoiceCount],['PRE_TOURNAMENT_SCORE',input.candidateA.score,input.candidateB.score]];
+  const comparisons:Array<[TieBreakReason,number,number]>=[['GROUP_INTEREST_SCORE',groupInterestScore(input.candidateA),groupInterestScore(input.candidateB)],['UNIQUE_NOMINATORS',input.candidateA.supportCount,input.candidateB.supportCount],['FIRST_CHOICES',input.candidateA.firstChoiceCount,input.candidateB.firstChoiceCount],['PRE_TOURNAMENT_SCORE',input.candidateA.score,input.candidateB.score]];
   for(const[tieBreak,a,b]of comparisons)if(a!==b){const winner=a>b?input.candidateA:input.candidateB;return{winnerId:winner.id,loserId:winner.id===input.candidateA.id?input.candidateB.id:input.candidateA.id,votesA,votesB,abstentions,tieBreak};}
   const winner=digest(`${input.roomSeed}:${input.matchupKey}:${input.candidateA.id}:${input.candidateB.id}`).charCodeAt(0)%2===0?input.candidateA:input.candidateB;return{winnerId:winner.id,loserId:winner.id===input.candidateA.id?input.candidateB.id:input.candidateA.id,votesA,votesB,abstentions,tieBreak:'SEEDED_COIN_FLIP' as const};
 }

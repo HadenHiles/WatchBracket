@@ -552,7 +552,7 @@ Later rounds follow tournament results, with deterministic tie-break seeding.
 
 Default tie order:
 
-1. Fewer abstentions among eligible voters
+1. Higher ranked group-interest score (three points per first choice, two per second choice)
 2. More unique direct nominators
 3. More first-choice nominations
 4. Higher pre-tournament candidate score

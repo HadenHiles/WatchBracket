@@ -239,20 +239,31 @@ export async function startTournament(
       reasonCodes: string[];
     };
     let pool: PoolItem[] = [...grouped.values()]
-      .map((item) => ({
-        ...item,
-        sourceType: "DIRECT" as const,
-        scoreTotal: 9000 + item.nominators.size * 100 + item.first * 50,
-        scoreComponents: {
-          directSupport: item.nominators.size,
-          firstChoiceSupport: item.first,
-        },
-        reasonCodes: ["Direct group nomination"],
-      }))
+      .map((item) => {
+        const support = item.nominators.size;
+        const second = support - item.first;
+        const rankPoints = item.first * 3 + second * 2;
+        return {
+          ...item,
+          sourceType: "DIRECT" as const,
+          scoreTotal: 8000 + support * 500 + rankPoints * 100,
+          scoreComponents: {
+            directSupport: support,
+            firstChoiceSupport: item.first,
+            secondChoiceSupport: second,
+            rankPoints,
+          },
+          reasonCodes: [
+            support > 1 ? "Shared group nomination" : "Direct group nomination",
+            item.first > 0 ? "Includes first-choice support" : "Second-choice support",
+          ],
+        };
+      })
       .sort(
         (a, b) =>
           b.nominators.size - a.nominators.size ||
-          b.first - a.first ||
+          (b.scoreComponents.rankPoints ?? 0) -
+            (a.scoreComponents.rankPoints ?? 0) ||
           a.catalogKey.localeCompare(b.catalogKey),
       );
     const selectedIds = new Set(pool.map((item) => item.mediaItemId));

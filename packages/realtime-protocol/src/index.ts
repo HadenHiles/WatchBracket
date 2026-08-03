@@ -146,6 +146,7 @@ export const TournamentSnapshotSchema = z.object({
           abstentions: z.number().int().nonnegative(),
           tieBreak: z
             .enum([
+              "GROUP_INTEREST_SCORE",
               "UNIQUE_NOMINATORS",
               "FIRST_CHOICES",
               "PRE_TOURNAMENT_SCORE",

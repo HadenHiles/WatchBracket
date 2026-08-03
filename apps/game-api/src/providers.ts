@@ -53,7 +53,7 @@ export async function enrichWithHouseholdProviders(ctx: DomainContext, items: Ca
     return {
       ...item,
       ...(local ? { localAvailability: { available: true, plexUrl: local.plexUrl, libraryTitle: local.libraryTitle, episodeCount: local.episodeCount } } : {}),
-      ...(request ? { requestAvailability: { status: request.status, requestable: request.requestable } } : {}),
+      ...(request ? { requestAvailability: { status: request.status, requestable: request.requestable, requestUrl: request.requestUrl } } : {}),
       ...(watched ? { householdHistoryScore: watched.playCount } : {})
     };
   });

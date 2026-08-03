@@ -86,6 +86,17 @@ function fixture(mode: string): DisplayScene {
       type: "WINNER",
       roomName: "Friday Movie Night",
       winner: { ...candidateB, strikes: 1 },
+      podium: [
+        { ...candidateB, strikes: 1, placement: 1 },
+        { ...candidateA, placement: 2 },
+        {
+          ...candidateA,
+          id: "33333333-3333-4333-8333-333333333333",
+          title: "Kestrel Station",
+          seed: 4,
+          placement: 3,
+        },
+      ],
       path: [
         { stage: "QUALIFIER", opponentTitle: "Moonlight Market" },
         { stage: "REDEMPTION", opponentTitle: "Aurora Drift" },

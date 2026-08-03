@@ -77,6 +77,7 @@ export const CatalogItemSchema = z.object({
         "UNAVAILABLE",
       ]),
       requestable: z.boolean(),
+      requestUrl: z.url().nullable().optional(),
     })
     .optional(),
 });
@@ -118,6 +119,9 @@ export const TournamentSnapshotSchema = z.object({
   stage: TournamentStageSchema,
   status: z.enum(["ACTIVE", "COMPLETED"]),
   champion: TournamentCandidateSchema.nullable(),
+  podium: z.array(TournamentCandidateSchema.extend({
+    placement: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  })).max(4),
   activeMatchup: z
     .object({
       id: z.uuid(),

@@ -72,7 +72,7 @@ const motionCss = `
 @keyframes wb-card-in{from{opacity:0;transform:translateY(5vh) rotate(-1deg)}to{opacity:1;transform:none}}
 @keyframes wb-champion{0%{opacity:0;transform:translateY(10vh) scale(.75) rotate(-4deg)}65%{transform:translateY(-1vh) scale(1.06) rotate(1deg)}100%{opacity:1;transform:none}}
 @keyframes wb-confetti{0%{transform:translateY(-15vh) rotate(0);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}@keyframes wb-redemption{0%{opacity:0;transform:scale(.65);box-shadow:0 0 0 #ff5964}65%{transform:scale(1.06);box-shadow:0 0 55px #ff5964}100%{opacity:1;transform:none}}@keyframes wb-flyover{from{opacity:0;transform:perspective(600px) rotateX(35deg) translateY(30px)}to{opacity:1;transform:none}}
-[data-wb-scene]{animation:wb-scene-in .45s ease-out both;overflow:hidden}.wb-candidate-card{animation:wb-card-in .55s cubic-bezier(.2,.8,.2,1) both}.wb-candidate-card:nth-child(2){animation-delay:.12s}.wb-candidate-card.wb-redemption{animation:wb-redemption .75s ease-out both}.wb-champion-poster{animation:wb-champion .8s cubic-bezier(.2,.9,.2,1) both}.wb-winner-path{animation:wb-flyover .8s ease-out .35s both}.wb-confetti{position:fixed;inset:0;pointer-events:none;z-index:20}.wb-confetti i{position:absolute;top:-5vh;width:1.1vw;height:2.3vw;min-width:8px;min-height:14px;background:#ffd637;animation:wb-confetti 2.8s linear infinite}.wb-confetti i:nth-child(2n){background:#ef3e46;animation-delay:.35s}.wb-confetti i:nth-child(3n){background:#50c9e8;animation-delay:.7s}.wb-confetti i:nth-child(4n){background:#fffbea;animation-delay:1.05s}[data-low-power=true] .wb-confetti{display:none}[data-low-power=true] [data-wb-scene],[data-low-power=true] .wb-candidate-card,[data-low-power=true] .wb-champion-poster{animation-duration:.15s;filter:none!important}@media(prefers-reduced-motion:reduce){[data-wb-scene],.wb-candidate-card,.wb-champion-poster,.wb-winner-path{animation:none!important}.wb-confetti{display:none!important}}
+[data-wb-scene]{animation:wb-scene-in .45s ease-out both;overflow:hidden}.wb-candidate-card{animation:wb-card-in .55s cubic-bezier(.2,.8,.2,1) both}.wb-candidate-card:nth-child(2){animation-delay:.12s}.wb-candidate-card.wb-redemption{animation:wb-redemption .75s ease-out both}.wb-champion-poster{animation:wb-champion .8s cubic-bezier(.2,.9,.2,1) both}.wb-winner-path{animation:wb-flyover .8s ease-out .35s both}.wb-confetti{position:fixed;inset:0;pointer-events:none;z-index:20}.wb-confetti i{position:absolute;top:-5vh;width:1.1vw;height:2.3vw;min-width:8px;min-height:14px;background:#ffd637;animation:wb-confetti 2.8s linear infinite}.wb-confetti i:nth-child(2n){background:#ef3e46;animation-delay:.35s}.wb-confetti i:nth-child(3n){background:#50c9e8;animation-delay:.7s}.wb-confetti i:nth-child(4n){background:#fffbea;animation-delay:1.05s}.wb-display-podium{display:flex;align-items:flex-end;justify-content:center;gap:clamp(.6rem,1.4vw,1.25rem);margin:1.2rem auto}.wb-podium-place{position:relative;width:clamp(80px,8vw,135px);display:grid;gap:.25rem;padding:.35rem .35rem .65rem;border:2px solid #4e79c8;background:#031847;box-shadow:6px 7px 0 #020a25;animation:wb-champion .8s cubic-bezier(.2,.9,.2,1) both}.wb-podium-place[data-placement="1"]{order:2;width:clamp(105px,10vw,165px);padding-bottom:1.2rem;border-color:#ffd637}.wb-podium-place[data-placement="2"]{order:1}.wb-podium-place[data-placement="3"]{order:3}.wb-podium-place img,.wb-podium-place .wb-poster-fallback{width:100%;aspect-ratio:2/3;object-fit:cover}.wb-podium-place strong{font-size:clamp(.7rem,1.2vw,1.1rem);line-height:1.1}.wb-podium-medal{position:absolute;top:-.7rem;left:50%;z-index:2;padding:.15rem .45rem;border:2px solid #fff;border-radius:999px;background:#ffd637;color:#06194d;font-weight:900;transform:translateX(-50%)}[data-low-power=true] .wb-confetti{display:none}[data-low-power=true] [data-wb-scene],[data-low-power=true] .wb-candidate-card,[data-low-power=true] .wb-champion-poster,[data-low-power=true] .wb-podium-place{animation-duration:.15s;filter:none!important}@media(prefers-reduced-motion:reduce){[data-wb-scene],.wb-candidate-card,.wb-champion-poster,.wb-podium-place,.wb-winner-path{animation:none!important}.wb-confetti{display:none!important}}
 `;
 
 function BrandMark({
@@ -310,27 +310,22 @@ export function RoomDisplay({
   if (scene.type === "WINNER")
     return (
       <main style={{ ...styles.canvas, gridTemplateColumns: "1.35fr .65fr" }} data-wb-scene="winner" data-low-power={lowPower}>
-        <div className="wb-confetti" aria-hidden="true">{Array.from({length:16},(_,index)=><i key={index} style={{left:`${4+index*6}%`}} />)}</div>
+        <div className="wb-confetti" aria-hidden="true">{Array.from({length:28},(_,index)=><i key={index} style={{left:`${(index*37)%100}%`,animationDelay:`${(index%9)*-.31}s`,animationDuration:`${2.4+(index%5)*.22}s`}} />)}</div>
         <section style={{ textAlign: "center" }}>
           <BrandMark src={logoSrc} centered />
-          {scene.winner.posterUrl && (
-            <img
-              src={scene.winner.posterUrl}
-              alt=""
-              style={{
-                width: "clamp(100px,12vw,190px)",
-                aspectRatio: "2/3",
-                objectFit: "cover",
-                border: "4px solid #ffd637",
-                boxShadow: "8px 8px 0 #ef3e46",
-              }}
-              className="wb-champion-poster"
-            />
-          )}
           <div style={{ color: "#fbbf24", fontWeight: 900 }}>WINNER</div>
           <h1 style={{ fontSize: "clamp(4rem,10vw,9rem)", margin: ".2em" }}>
             {scene.winner.title}
           </h1>
+          <div className="wb-display-podium" aria-label="Tournament podium">
+            {scene.podium.map((candidate, index) => (
+              <article className="wb-podium-place" data-placement={candidate.placement} key={`${candidate.placement}:${candidate.id}`} style={{animationDelay:`${index*.12}s`}}>
+                <span className="wb-podium-medal">{candidate.placement === 1 ? "1st" : candidate.placement === 2 ? "2nd" : "3rd"}</span>
+                {candidate.posterUrl ? <img src={candidate.posterUrl} alt="" /> : <div className="wb-poster-fallback" style={styles.posterFallback}>WB</div>}
+                <strong>{candidate.title}</strong>
+              </article>
+            ))}
+          </div>
           <p style={{ fontSize: "clamp(1.4rem,3vw,2.5rem)" }}>
             {scene.winner.mediaType} · {scene.winner.releaseYear} ·{" "}
             {scene.winner.runtimeMinutes} min

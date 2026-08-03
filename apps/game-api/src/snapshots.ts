@@ -208,7 +208,11 @@ function parseRequestAvailability(value: unknown) {
   ] as const;
   const status = statuses.find((entry) => entry === item.status);
   if (!status || typeof item.requestable !== "boolean") return undefined;
-  return { status, requestable: item.requestable };
+  return {
+    status,
+    requestable: item.requestable,
+    requestUrl: typeof item.requestUrl === "string" ? item.requestUrl : null,
+  };
 }
 
 export function toDisplayScene(
@@ -275,12 +279,16 @@ export function toDisplayScene(
   if (snapshot.state === "WINNER" && tournament.champion) {
     const champion = tournament.champion;
     const tmdbId = champion.catalogKey.split(":").at(-1);
-    const actionUrl = champion.localAvailability?.plexUrl ?? champion.availability?.link ?? `https://www.themoviedb.org/${champion.mediaType === "MOVIE" ? "movie" : "tv"}/${tmdbId}`;
-    const actionLabel = champion.localAvailability?.plexUrl ? "Open in Plex" : champion.availability?.link ? "View streaming options" : "View title details";
+    const actionUrl = champion.localAvailability?.plexUrl ?? champion.requestAvailability?.requestUrl ?? champion.availability?.link ?? `https://www.themoviedb.org/${champion.mediaType === "MOVIE" ? "movie" : "tv"}/${tmdbId}`;
+    const actionLabel = champion.localAvailability?.plexUrl ? "Watch now on Plex" : champion.requestAvailability?.requestUrl ? "Open in Jellyseerr to request" : champion.availability?.link ? "View streaming options" : "View title details";
     return {
       type: "WINNER",
       roomName: snapshot.name,
       winner: sceneCandidate(champion),
+      podium: tournament.podium.map((item) => ({
+        ...sceneCandidate(item),
+        placement: item.placement,
+      })),
       path: tournament.bracket
         .filter((result) => result.winnerId === champion.id)
         .map((result) => ({

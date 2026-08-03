@@ -77,6 +77,7 @@ const TournamentCandidateSceneSchema = z.object({
   requestAvailability: z.object({
     status: z.enum(["UNKNOWN", "PENDING", "PROCESSING", "PARTIAL", "AVAILABLE", "REQUESTABLE", "UNAVAILABLE"]),
     requestable: z.boolean(),
+    requestUrl: z.url().nullable().optional(),
   }).optional(),
   seed: z.number().int().positive(),
   strikes: z.number().int().nonnegative(),
@@ -131,6 +132,9 @@ export const WinnerSceneSchema = z.object({
   type: z.literal("WINNER"),
   roomName: z.string(),
   winner: TournamentCandidateSceneSchema,
+  podium: z.array(TournamentCandidateSceneSchema.extend({
+    placement: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  })).max(4),
   path: z.array(
     z.object({ stage: TournamentStageSceneSchema, opponentTitle: z.string() }),
   ),

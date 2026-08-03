@@ -35,6 +35,17 @@ describe('private media integrations', () => {
     expect(result).toEqual({ requestId: 42, status: 'PENDING' });
   });
 
+  it('provides a credential-free direct Jellyseerr title link', async () => {
+    const fetcher = vi.fn(() => json({ mediaInfo: { status: 1 } }));
+    const result = await new SeerrProvider('https://seerr.example.test', 'secret-key', fetcher as typeof fetch)
+      .statuses([{ tmdbId: 438631, mediaType: 'MOVIE' }]);
+    expect(result[0]).toMatchObject({
+      requestable: true,
+      requestUrl: 'https://seerr.example.test/movie/438631',
+    });
+    expect(result[0]?.requestUrl).not.toContain('secret-key');
+  });
+
   it('resolves the latest TV season before creating a Seerr request', async () => {
     const fetcher = vi.fn((url: URL | RequestInfo, init?: RequestInit) => {
       if (new URL(String(url)).pathname === '/api/v1/tv/1399') {

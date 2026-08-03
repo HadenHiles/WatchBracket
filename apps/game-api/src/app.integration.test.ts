@@ -165,6 +165,11 @@ suite('Milestones 1 through 3 API against PostgreSQL', () => {
     const winnerSnapshot = (await app.inject({ method: 'GET', url: `/api/rooms/${created.roomId}/snapshot`, headers: { cookie: hostRoomCookies } })).json();
     expect(winnerSnapshot).toMatchObject({ state: 'WINNER', tournament: { completedMatchups: 9, status: 'COMPLETED' } });
     expect(winnerSnapshot.tournament.champion).toBeTruthy();
+    expect(winnerSnapshot.tournament.podium).toEqual([
+      expect.objectContaining({ placement: 1 }),
+      expect.objectContaining({ placement: 2 }),
+      expect.objectContaining({ placement: 3 }),
+    ]);
     expect(winnerSnapshot.tournament.tasteSnapshot).toMatchObject({ dominantGenres: expect.any(Array) });
     expect(await inspector.db.select().from(watchBracketHistory).where(eq(watchBracketHistory.roomId, created.roomId))).toHaveLength(1);
     const replayRoom = await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/run-it-back`, headers: hostHeaders, payload: {} });

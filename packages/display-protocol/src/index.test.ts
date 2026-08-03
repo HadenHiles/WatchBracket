@@ -103,6 +103,11 @@ describe("Cast launch protocol", () => {
         type: "WINNER",
         roomName: "Friday",
         winner: candidateB,
+        podium: [
+          { ...candidateB, placement: 1 },
+          { ...candidateA, placement: 2 },
+          { ...candidateA, placement: 3 },
+        ],
         path: [{ stage: "CHAMPIONSHIP_FINAL", opponentTitle: "Aurora Drift" }],
         actionUrl: "https://example.com/winner",
         actionLabel: "View winner",

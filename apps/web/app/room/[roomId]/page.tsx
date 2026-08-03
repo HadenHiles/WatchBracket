@@ -391,7 +391,7 @@ export default function RoomPage() {
   const nominating = snapshot.state === "NOMINATING";
   const revealed = snapshot.state === "NOMINATIONS_LOCKED";
   const champion = snapshot.tournament?.champion;
-  const winnerActionUrl = champion?.localAvailability?.plexUrl ?? champion?.availability?.link ?? window.location.href;
+  const winnerActionUrl = champion?.localAvailability?.plexUrl ?? champion?.requestAvailability?.requestUrl ?? champion?.availability?.link ?? window.location.href;
   const canStartCast = cast.state === "ready";
   const castButtonLabel =
     cast.state === "loading"
@@ -968,10 +968,47 @@ export default function RoomPage() {
           </div>
           {snapshot.state === "WINNER" && snapshot.tournament.champion ? (
             <div className="winner-controller">
-              <p>🏆 Tonight&apos;s winner</p>
-              {snapshot.tournament.champion.posterUrl && <img className="winner-poster" src={snapshot.tournament.champion.posterUrl} alt="" />}
-              <h1>{snapshot.tournament.champion.title}</h1>
-              <p>
+              <div className="controller-confetti" aria-hidden="true">
+                {Array.from({ length: 32 }, (_, index) => (
+                  <i
+                    key={index}
+                    style={{
+                      left: `${(index * 37) % 100}%`,
+                      animationDelay: `${(index % 9) * -0.31}s`,
+                      animationDuration: `${2.4 + (index % 5) * 0.22}s`,
+                    }}
+                  />
+                ))}
+              </div>
+              <p className="winner-kicker">🏆 Tonight&apos;s feature presentation</p>
+              <h1 className="winner-title">{snapshot.tournament.champion.title}</h1>
+              <div className="winner-podium" aria-label="Tournament podium">
+                {snapshot.tournament.podium.map((candidate, index) => (
+                  <article
+                    className={`podium-place podium-place-${candidate.placement}`}
+                    key={`${candidate.placement}:${candidate.id}`}
+                    style={{ animationDelay: `${index * 120}ms` }}
+                  >
+                    <span className="podium-medal">
+                      {candidate.placement === 1
+                        ? "1st"
+                        : candidate.placement === 2
+                          ? "2nd"
+                          : "3rd"}
+                    </span>
+                    {candidate.posterUrl ? (
+                      <img src={candidate.posterUrl} alt="" />
+                    ) : (
+                      <span className="poster-placeholder" aria-hidden="true">WB</span>
+                    )}
+                    <strong>{candidate.title}</strong>
+                    <small>
+                      {candidate.releaseYear} · Seed #{candidate.seed}
+                    </small>
+                  </article>
+                ))}
+              </div>
+              <p className="winner-metadata">
                 {snapshot.tournament.champion.mediaType} ·{" "}
                 {snapshot.tournament.champion.releaseYear} ·{" "}
                 {snapshot.tournament.champion.runtimeMinutes} min
@@ -982,11 +1019,12 @@ export default function RoomPage() {
               <div className="winner-actions">
                 <div className="qr-frame"><QRCodeSVG value={winnerActionUrl} size={142} fgColor="#06194d" bgColor="#fffdf0" /></div>
                 <div className="stack">
-                  {snapshot.tournament.champion.localAvailability?.plexUrl && <a className="button-link" href={snapshot.tournament.champion.localAvailability.plexUrl} target="_blank" rel="noreferrer">Open in Plex</a>}
-                  {!snapshot.tournament.champion.localAvailability?.plexUrl && snapshot.tournament.champion.availability?.link && <a className="button-link" href={snapshot.tournament.champion.availability.link} target="_blank" rel="noreferrer">View streaming options</a>}
+                  {snapshot.tournament.champion.localAvailability?.plexUrl && <a className="button-link winner-primary-action" href={snapshot.tournament.champion.localAvailability.plexUrl} target="_blank" rel="noreferrer">▶ Watch now on Plex</a>}
+                  {!snapshot.tournament.champion.localAvailability?.plexUrl && snapshot.tournament.champion.requestAvailability?.requestUrl && <a className="button-link winner-primary-action" href={snapshot.tournament.champion.requestAvailability.requestUrl} target="_blank" rel="noreferrer">Open in Jellyseerr to request</a>}
+                  {!snapshot.tournament.champion.localAvailability?.plexUrl && !snapshot.tournament.champion.requestAvailability?.requestUrl && snapshot.tournament.champion.availability?.link && <a className="button-link winner-primary-action" href={snapshot.tournament.champion.availability.link} target="_blank" rel="noreferrer">View streaming options</a>}
                   {snapshot.tournament.champion.requestAvailability?.requestable && host && <>
                     {snapshot.tournament.champion.mediaType === "TV" && <label>TV season request<select value={tvSeasonPolicy} onChange={(event)=>setTvSeasonPolicy(event.target.value as typeof tvSeasonPolicy)}><option value="FIRST">Season 1</option><option value="LATEST">Latest season</option><option value="ALL">All seasons</option></select></label>}
-                    <button disabled={winnerActionPending} onClick={()=>void requestWinner()}>{winnerActionPending ? "Requesting…" : "Request in Seerr"}</button>
+                    <button className="secondary" disabled={winnerActionPending} onClick={()=>void requestWinner()}>{winnerActionPending ? "Requesting…" : "Request now via Jellyseerr"}</button>
                   </>}
                   {host && <button className="secondary" disabled={winnerActionPending} onClick={()=>void replay()}>Run It Back</button>}
                   {winnerActionMessage && <p className="notice" role="status">{winnerActionMessage}</p>}

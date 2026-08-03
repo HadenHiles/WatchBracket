@@ -124,14 +124,18 @@ function toScene(value: unknown): DisplayScene {
       type: "WINNER",
       roomName: snapshot.name,
       winner: candidate(tournament.champion),
+      podium: tournament.podium.map((item) => ({
+        ...candidate(item),
+        placement: item.placement,
+      })),
       path: tournament.bracket
         .filter((result) => result.winnerId === tournament.champion!.id)
         .map((result) => ({
           stage: result.stage,
           opponentTitle: result.loserTitle,
         })),
-      actionUrl: tournament.champion.localAvailability?.plexUrl ?? tournament.champion.availability?.link ?? `https://www.themoviedb.org/${tournament.champion.mediaType === "MOVIE" ? "movie" : "tv"}/${tournament.champion.catalogKey.split(":").at(-1)}`,
-      actionLabel: tournament.champion.localAvailability?.plexUrl ? "Open in Plex" : tournament.champion.availability?.link ? "View streaming options" : "View title details",
+      actionUrl: tournament.champion.localAvailability?.plexUrl ?? tournament.champion.requestAvailability?.requestUrl ?? tournament.champion.availability?.link ?? `https://www.themoviedb.org/${tournament.champion.mediaType === "MOVIE" ? "movie" : "tv"}/${tournament.champion.catalogKey.split(":").at(-1)}`,
+      actionLabel: tournament.champion.localAvailability?.plexUrl ? "Watch now on Plex" : tournament.champion.requestAvailability?.requestUrl ? "Open in Jellyseerr to request" : tournament.champion.availability?.link ? "View streaming options" : "View title details",
       tasteSnapshot: tournament.tasteSnapshot,
     };
   if (!matchup) throw new Error("Matchup unavailable");

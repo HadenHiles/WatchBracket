@@ -896,7 +896,11 @@ export async function getTournamentData(
           }
         : {}),
       ...(requestStatus && request && typeof request.requestable === "boolean"
-        ? { requestAvailability: { status: requestStatus, requestable: request.requestable } }
+        ? { requestAvailability: {
+            status: requestStatus,
+            requestable: request.requestable,
+            requestUrl: typeof request.requestUrl === "string" ? request.requestUrl : null,
+          } }
         : {}),
       seed: item.seed,
       strikes: item.strikes,
@@ -926,6 +930,32 @@ export async function getTournamentData(
         }
       : null;
   const tasteSnapshot = tournament.status === "COMPLETED" ? await getRoomTasteSnapshot(db, roomId) : null;
+  const finalResult = [...state.completed]
+    .reverse()
+    .find((result) => result.matchup.stage === "CHAMPIONSHIP_FINAL");
+  const bronzeResults = state.completed.filter((result) =>
+    result.matchup.stage === "CHAMPIONSHIP_SEMI",
+  );
+  const fallbackBronzeResults = bronzeResults.length
+    ? bronzeResults
+    : state.completed.filter((result) =>
+        result.matchup.stage === "CHAMPIONSHIP_PLAY_IN",
+      );
+  const podium = finalResult
+    ? [
+        { ...media(finalResult.winnerId), placement: 1 as const },
+        { ...media(finalResult.loserId), placement: 2 as const },
+        ...fallbackBronzeResults
+          .filter(
+            (result) =>
+              result.loserId !== finalResult.winnerId &&
+              result.loserId !== finalResult.loserId,
+          )
+          .map((result) => ({ ...media(result.loserId), placement: 3 as const }))
+          .sort((a, b) => a.seed - b.seed)
+          .slice(0, 2),
+      ]
+    : [];
   return {
     format: tournament.format as TournamentFormat,
     totalMatchups: state.format === 8 ? 9 : state.format === 12 ? 15 : 19,
@@ -934,6 +964,7 @@ export async function getTournamentData(
     status: tournament.status,
     tasteSnapshot,
     champion: state.championId ? media(state.championId) : null,
+    podium,
     activeMatchup: active
       ? {
           id: active.id,

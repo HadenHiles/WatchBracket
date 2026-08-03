@@ -45,7 +45,8 @@ export const CanonicalMediaItemSchema = z.object({
   }).optional(),
   requestAvailability: z.object({
     status: z.enum(['UNKNOWN', 'PENDING', 'PROCESSING', 'PARTIAL', 'AVAILABLE', 'REQUESTABLE', 'UNAVAILABLE']),
-    requestable: z.boolean()
+    requestable: z.boolean(),
+    requestUrl: z.url().nullable().optional()
   }).optional(),
   householdHistoryScore: z.number().nonnegative().optional()
 });
@@ -152,7 +153,7 @@ export const PlexWatchlistResultSchema = z.object({ ok: z.literal(true), provide
 export const PlexUnlinkResultSchema = z.object({ ok: z.literal(true), provider: z.literal('PLEX'), operation: z.literal('PLEX_UNLINK'), unlinked: z.literal(true) });
 export const TautulliHistoryResultSchema = z.object({ ok: z.literal(true), provider: z.literal('TAUTULLI'), operation: z.literal('TAUTULLI_HISTORY'), items: z.array(z.object({ tmdbId: z.number().int().positive().nullable(), mediaType: MediaTypeSchema.nullable(), title: z.string(), playCount: z.number().int().nonnegative(), lastWatchedAt: z.iso.datetime().nullable() })), refreshedAt: z.iso.datetime() });
 export const SeerrStatusSchema = z.enum(['UNKNOWN', 'PENDING', 'PROCESSING', 'PARTIAL', 'AVAILABLE', 'REQUESTABLE', 'UNAVAILABLE']);
-export const SeerrStatusResultSchema = z.object({ ok: z.literal(true), provider: z.literal('SEERR'), operation: z.literal('SEERR_STATUS'), items: z.array(z.object({ tmdbId: z.number().int().positive(), mediaType: MediaTypeSchema, status: SeerrStatusSchema, requestable: z.boolean() })) });
+export const SeerrStatusResultSchema = z.object({ ok: z.literal(true), provider: z.literal('SEERR'), operation: z.literal('SEERR_STATUS'), items: z.array(z.object({ tmdbId: z.number().int().positive(), mediaType: MediaTypeSchema, status: SeerrStatusSchema, requestable: z.boolean(), requestUrl: z.url().nullable() })) });
 export const SeerrRequestResultSchema = z.object({ ok: z.literal(true), provider: z.literal('SEERR'), operation: z.literal('SEERR_REQUEST'), requestId: z.number().int().positive(), status: SeerrStatusSchema });
 export const ProviderSuccessSchema = z.union([TmdbSearchResultSchema, TmdbRecommendationsResultSchema, ProviderHealthResultSchema, PlexInventoryResultSchema, PlexAuthStartResultSchema, PlexAuthStatusResultSchema, PlexWatchlistResultSchema, PlexUnlinkResultSchema, TautulliHistoryResultSchema, SeerrStatusResultSchema, SeerrRequestResultSchema]);
 export const ProviderErrorSchema = z.object({ ok: z.literal(false), error: z.object({ code: z.enum(['NOT_CONFIGURED', 'NOT_IMPLEMENTED', 'UPSTREAM_ERROR', 'UPSTREAM_TIMEOUT', 'INVALID_RESPONSE', 'CIRCUIT_OPEN', 'ALREADY_REQUESTED']), message: z.string() }) });

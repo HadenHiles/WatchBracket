@@ -139,14 +139,17 @@ const seerrStatus = (value: unknown) => {
 
 export class SeerrProvider {
   private readonly client: PrivateProviderClient;
-  constructor(baseUrl: string | undefined, apiKey: string | undefined, fetcher: Fetcher = fetch) { this.client = new PrivateProviderClient('Seerr', baseUrl, apiKey ? { 'X-Api-Key': apiKey } : {}, fetcher); }
+  private readonly baseUrl: string | undefined;
+  constructor(baseUrl: string | undefined, apiKey: string | undefined, fetcher: Fetcher = fetch) { this.baseUrl = baseUrl; this.client = new PrivateProviderClient('Seerr', baseUrl, apiKey ? { 'X-Api-Key': apiKey } : {}, fetcher); }
   get configured() { return this.client.configured; }
   get circuit() { return this.client.circuit; }
   async health() { await this.client.json('/api/v1/status'); return true; }
   async statuses(items: Array<{ tmdbId: number; mediaType: 'MOVIE' | 'TV' }>) {
     const values = await Promise.all(items.map(async (item) => {
-      try { const raw = object(await this.client.json(`/api/v1/${item.mediaType === 'MOVIE' ? 'movie' : 'tv'}/${item.tmdbId}`)); const status = seerrStatus(object(raw?.mediaInfo)?.status); return { ...item, status, requestable: status === 'REQUESTABLE' || status === 'UNAVAILABLE' }; }
-      catch (error) { if (error instanceof IntegrationProviderError && error.code === 'UPSTREAM_ERROR') return { ...item, status: 'UNKNOWN' as const, requestable: false }; throw error; }
+      const mediaPath = item.mediaType === 'MOVIE' ? 'movie' : 'tv';
+      const requestUrl = this.baseUrl ? new URL(`/${mediaPath}/${item.tmdbId}`, this.baseUrl).toString() : null;
+      try { const raw = object(await this.client.json(`/api/v1/${mediaPath}/${item.tmdbId}`)); const status = seerrStatus(object(raw?.mediaInfo)?.status); return { ...item, status, requestable: status === 'REQUESTABLE' || status === 'UNAVAILABLE', requestUrl }; }
+      catch (error) { if (error instanceof IntegrationProviderError && error.code === 'UPSTREAM_ERROR') return { ...item, status: 'UNKNOWN' as const, requestable: false, requestUrl }; throw error; }
     }));
     return values;
   }

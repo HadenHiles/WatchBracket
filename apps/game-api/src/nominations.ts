@@ -15,6 +15,12 @@ export const HOUSE_RULE_PRESETS: Record<HouseRules['preset'], HouseRules> = {
   DEEP_DIVE: { preset: 'DEEP_DIVE', nominationDurationSeconds: 180, nominationSlots: 2, revealMode: 'AFTER_DEADLINE' }
 };
 
+export const pausedNominationSeconds = (deadline: Date, now: Date) =>
+  Math.max(1, Math.ceil((deadline.getTime() - now.getTime()) / 1000));
+
+export const restoredNominationDeadline = (now: Date, pausedSeconds: number) =>
+  new Date(now.getTime() + Math.max(1, pausedSeconds) * 1000);
+
 export async function seedMockCatalog(ctx: DomainContext) {
   for (const item of mockCatalog) {
     await ctx.db.insert(mediaItems).values({ ...item, originalTitle: item.title, genres: item.genres, metadata: { source: 'MOCK', deterministic: true } })
@@ -74,7 +80,7 @@ export async function startNominations(ctx: DomainContext, participantId: string
   const rules = HouseRulesSchema.parse(input);
   await requireRoomHost(ctx.db, participantId, roomId);
   const deadline = new Date(Date.now() + rules.nominationDurationSeconds * 1000);
-  const [room] = await ctx.db.update(rooms).set({ state: 'NOMINATING', lockedAt: new Date(), rules, randomSeed: randomUUID(), nominationDeadline: deadline, nominationsRevealedAt: null, version: sql`${rooms.version} + 1`, updatedAt: new Date() })
+  const [room] = await ctx.db.update(rooms).set({ state: 'NOMINATING', lockedAt: new Date(), rules, randomSeed: randomUUID(), nominationDeadline: deadline, nominationAutoStartAt: null, nominationPausedSeconds: null, nominationsRevealedAt: null, version: sql`${rooms.version} + 1`, updatedAt: new Date() })
     .where(and(eq(rooms.id, roomId), eq(rooms.state, 'LOBBY'))).returning();
   if (!room) throw new DomainError('NOMINATIONS_ALREADY_STARTED', 'Nominations have already started.', 409);
   await ctx.db.update(participants).set({ ready: false }).where(and(eq(participants.roomId, roomId), isNull(participants.removedAt)));
@@ -118,16 +124,39 @@ export async function submitNomination(ctx: DomainContext, participantId: string
 export async function setNominationsReady(ctx: DomainContext, participantId: string, roomId: string, ready: boolean) {
   await ctx.db.transaction(async (tx) => {
     const [room] = await tx.select().from(rooms).where(eq(rooms.id, roomId)).for('update').limit(1);
-    if (!room || room.state !== 'NOMINATING' || !room.nominationDeadline || room.nominationDeadline.getTime() <= Date.now()) throw new DomainError('NOMINATIONS_CLOSED', 'Nominations are closed.', 409);
+    const now = new Date();
+    const nominationTimerOpen =
+      room?.nominationAutoStartAt !== null ||
+      (room?.nominationDeadline !== null && room.nominationDeadline.getTime() > now.getTime());
+    if (!room || room.state !== 'NOMINATING' || !nominationTimerOpen) throw new DomainError('NOMINATIONS_CLOSED', 'Nominations are closed.', 409);
     const [participant] = await tx.select({ id: participants.id }).from(participants).where(and(eq(participants.id, participantId), eq(participants.roomId, roomId), isNull(participants.removedAt))).limit(1);
     if (!participant) throw new DomainError('ROOM_SESSION_REQUIRED', 'A room-scoped session is required.', 401);
+    if (ready && room.nominationAutoStartAt) return;
     if (ready) {
       const selected = await tx.select({ rank: submissions.rank }).from(submissions).where(and(eq(submissions.roomId, roomId), eq(submissions.participantId, participantId)));
       if (new Set(selected.map((item) => item.rank)).size !== 2) throw new DomainError('TWO_SUBMISSIONS_REQUIRED', 'Choose both ranked nominations before locking them in.', 409);
     }
-    const now = new Date();
     await tx.update(participants).set({ ready }).where(eq(participants.id, participantId));
     await tx.update(submissions).set({ lockedAt: ready ? now : null }).where(and(eq(submissions.roomId, roomId), eq(submissions.participantId, participantId)));
+    if (!ready && room.nominationAutoStartAt) {
+      const restoredDeadline = restoredNominationDeadline(
+        now,
+        room.nominationPausedSeconds ?? 1,
+      );
+      await tx.update(rooms).set({ nominationDeadline: restoredDeadline, nominationAutoStartAt: null, nominationPausedSeconds: null, version: sql`${rooms.version} + 1`, updatedAt: now }).where(eq(rooms.id, roomId));
+      return;
+    }
+    if (ready && room.nominationDeadline) {
+      const [progress] = await tx.select({
+        total: sql<number>`count(*)::int`,
+        ready: sql<number>`count(*) filter (where ${participants.ready})::int`,
+      }).from(participants).where(and(eq(participants.roomId, roomId), isNull(participants.removedAt), ne(participants.role, 'SPECTATOR')));
+      if ((progress?.total ?? 0) > 0 && progress?.ready === progress?.total) {
+        const pausedSeconds = pausedNominationSeconds(room.nominationDeadline, now);
+        await tx.update(rooms).set({ nominationDeadline: null, nominationAutoStartAt: new Date(now.getTime() + 10_000), nominationPausedSeconds: pausedSeconds, version: sql`${rooms.version} + 1`, updatedAt: now }).where(eq(rooms.id, roomId));
+        return;
+      }
+    }
     await tx.update(rooms).set({ version: sql`${rooms.version} + 1`, updatedAt: now }).where(eq(rooms.id, roomId));
   });
 }
@@ -144,7 +173,7 @@ export async function extendNominations(ctx: DomainContext, participantId: strin
 export async function closeNominations(ctx: DomainContext, participantId: string, roomId: string) {
   await requireRoomHost(ctx.db, participantId, roomId);
   const now = new Date();
-  const [room] = await ctx.db.update(rooms).set({ state: 'NOMINATIONS_LOCKED', nominationsRevealedAt: now, version: sql`${rooms.version} + 1`, updatedAt: now })
+  const [room] = await ctx.db.update(rooms).set({ state: 'NOMINATIONS_LOCKED', nominationAutoStartAt: null, nominationPausedSeconds: null, nominationsRevealedAt: now, version: sql`${rooms.version} + 1`, updatedAt: now })
     .where(and(eq(rooms.id, roomId), eq(rooms.state, 'NOMINATING'))).returning();
   if (!room) throw new DomainError('NOMINATIONS_CLOSED', 'Nominations are already closed.', 409);
   await ctx.db.insert(auditEvents).values({ householdId: room.householdId, roomId, actorType: 'PARTICIPANT', actorId: participantId, eventType: 'NOMINATIONS_REVEALED', metadata: { reason: 'HOST_ACTION' } });

@@ -156,6 +156,7 @@ export async function getSnapshot(
     })),
     rules: HouseRulesSchema.parse(room.rules),
     nominationDeadline: room.nominationDeadline?.toISOString() ?? null,
+    nominationAutoStartAt: room.nominationAutoStartAt?.toISOString() ?? null,
     nominationsRevealed: revealed,
     nominationProgress: {
       submittedParticipants: [...byParticipant.values()].filter(
@@ -239,6 +240,7 @@ export function toDisplayScene(
       roomName: snapshot.name,
       roomCode: snapshot.code,
       deadline: snapshot.nominationDeadline,
+      autoStartAt: snapshot.nominationAutoStartAt,
       submittedParticipants: snapshot.nominationProgress.submittedParticipants,
       lockedParticipants: snapshot.nominationProgress.lockedParticipants,
       totalParticipants: snapshot.nominationProgress.totalParticipants,

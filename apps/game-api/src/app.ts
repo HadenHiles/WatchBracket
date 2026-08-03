@@ -59,6 +59,7 @@ import {
 } from "./nominations.js";
 import { getHouseholdSetup, saveHouseholdSetup } from "./setup.js";
 import {
+  autoStartTournament,
   extendVoting,
   processTournamentTransition,
   skipPresentation,
@@ -1069,10 +1070,22 @@ export async function buildApp(env: GameApiEnv) {
     await bootstrapAdmin(context);
     await seedMockCatalog(context);
     realtime = createRealtime(app, env);
-    stopScheduler = startExpirationScheduler(app.db, async (roomId) => {
-      await processTournamentTransition(context, roomId);
-      await realtime.broadcastRoom(roomId);
-    });
+    stopScheduler = startExpirationScheduler(
+      app.db,
+      async (roomId) => {
+        await processTournamentTransition(context, roomId);
+        await realtime.broadcastRoom(roomId);
+      },
+      async (roomId) => {
+        try {
+          await autoStartTournament(context, roomId);
+          await realtime.broadcastRoom(roomId, "matchup:started");
+        } catch (error) {
+          app.log.error({ err: error, roomId }, "automatic tournament start failed");
+          await realtime.broadcastRoom(roomId, "room:nomination-progress");
+        }
+      },
+    );
   });
   app.addHook("onClose", async () => {
     stopScheduler?.();

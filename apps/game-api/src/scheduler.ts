@@ -1,18 +1,44 @@
 import { sql } from 'drizzle-orm';
 import type { Database } from '@watch-bracket/db';
 
-export function startExpirationScheduler(db: Database, onTransition: (roomId: string) => void | Promise<void>, intervalMs = 1_000) {
+export function startExpirationScheduler(
+  db: Database,
+  onTransition: (roomId: string) => void | Promise<void>,
+  onAutoStartOrInterval?: ((roomId: string) => void | Promise<void>) | number,
+  intervalMs = 1_000,
+) {
+  const onAutoStart =
+    typeof onAutoStartOrInterval === 'function'
+      ? onAutoStartOrInterval
+      : onTransition;
+  const pollInterval =
+    typeof onAutoStartOrInterval === 'number'
+      ? onAutoStartOrInterval
+      : intervalMs;
   let running = false;
   const poll = async () => {
     if (running) return;
     running = true;
     try {
+      const automaticStarts = await db.execute<{ id: string }>(sql`
+        WITH due AS (
+          SELECT id FROM rooms WHERE state = 'NOMINATING' AND nomination_auto_start_at <= now()
+          ORDER BY nomination_auto_start_at FOR UPDATE SKIP LOCKED LIMIT 25
+        )
+        UPDATE rooms SET state = 'NOMINATIONS_LOCKED', nomination_auto_start_at = NULL,
+          nomination_paused_seconds = NULL, nominations_revealed_at = now(),
+          version = version + 1, updated_at = now()
+        FROM due WHERE rooms.id = due.id AND rooms.state = 'NOMINATING'
+        RETURNING rooms.id
+      `);
       const nominations = await db.execute<{ id: string }>(sql`
         WITH due AS (
           SELECT id FROM rooms WHERE state = 'NOMINATING' AND nomination_deadline <= now()
           ORDER BY nomination_deadline FOR UPDATE SKIP LOCKED LIMIT 25
         )
-        UPDATE rooms SET state = 'NOMINATIONS_LOCKED', nominations_revealed_at = now(), version = version + 1, updated_at = now()
+        UPDATE rooms SET state = 'NOMINATIONS_LOCKED', nomination_auto_start_at = NULL,
+          nomination_paused_seconds = NULL, nominations_revealed_at = now(),
+          version = version + 1, updated_at = now()
         FROM due WHERE rooms.id = due.id AND rooms.state = 'NOMINATING'
         RETURNING rooms.id
       `);
@@ -33,12 +59,13 @@ export function startExpirationScheduler(db: Database, onTransition: (roomId: st
         FROM due WHERE rooms.id = due.id AND rooms.state <> 'EXPIRED'
         RETURNING rooms.id
       `);
+      for (const row of automaticStarts) await onAutoStart(row.id);
       for (const row of tournamentDue) await onTransition(row.id);
       for (const row of [...nominations, ...expired]) await onTransition(row.id);
     } finally { running = false; }
   };
   void poll();
-  const timer = setInterval(() => void poll(), intervalMs);
+  const timer = setInterval(() => void poll(), pollInterval);
   timer.unref();
   return () => clearInterval(timer);
 }

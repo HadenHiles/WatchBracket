@@ -36,6 +36,7 @@ function sceneFromSnapshot(value: unknown): DisplayScene {
       roomName: snapshot.name,
       roomCode: snapshot.code,
       deadline: snapshot.nominationDeadline,
+      autoStartAt: snapshot.nominationAutoStartAt,
       submittedParticipants: snapshot.nominationProgress.submittedParticipants,
       lockedParticipants: snapshot.nominationProgress.lockedParticipants,
       totalParticipants: snapshot.nominationProgress.totalParticipants,

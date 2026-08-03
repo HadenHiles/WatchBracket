@@ -286,6 +286,8 @@ export function NominationProgressDisplay({
   lowPower?: boolean;
 }) {
   const seconds = useSecondsRemaining(scene.deadline);
+  const autoStartSeconds = useSecondsRemaining(scene.autoStartAt);
+  const autoStarting = scene.autoStartAt !== null;
   return (
     <main style={{ ...styles.canvas, gridTemplateColumns: "1fr 1.25fr" }} data-wb-scene="nominations" data-low-power={lowPower}>
       <section>
@@ -299,6 +301,8 @@ export function NominationProgressDisplay({
         <div style={styles.code}>
           {scene.revealed
             ? "REVEAL"
+            : autoStarting
+              ? `0:${String(autoStartSeconds).padStart(2, "0")}`
             : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`}
         </div>
         <p>
@@ -306,6 +310,11 @@ export function NominationProgressDisplay({
           submitted · {scene.lockedParticipants} locked
         </p>
         <p>{connection}</p>
+        {autoStarting && (
+          <p style={{ color: "#ffd637", fontWeight: 900 }}>
+            Everyone is locked in · tournament starting automatically
+          </p>
+        )}
       </section>
       <section>
         {scene.revealed ? (

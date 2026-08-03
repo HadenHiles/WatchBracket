@@ -41,6 +41,7 @@ function fixture(mode: string): DisplayScene {
       roomName: "Friday Movie Night",
       roomCode: "7K9MQR",
       deadline,
+      autoStartAt: null,
       submittedParticipants: 2,
       lockedParticipants: 1,
       totalParticipants: 3,

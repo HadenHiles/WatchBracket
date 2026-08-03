@@ -23,8 +23,9 @@ describe("Cast launch protocol", () => {
     const scene = {
       type: "NOMINATION_PROGRESS",
       roomName: "Friday",
-      roomCode: "ABC123",
-      deadline: new Date().toISOString(),
+        roomCode: "ABC123",
+        deadline: new Date().toISOString(),
+        autoStartAt: null,
       submittedParticipants: 2,
       lockedParticipants: 1,
       totalParticipants: 4,

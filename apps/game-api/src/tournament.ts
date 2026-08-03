@@ -367,6 +367,33 @@ export async function startTournament(
   });
 }
 
+export async function autoStartTournament(
+  ctx: DomainContext,
+  roomId: string,
+) {
+  const [room] = await ctx.db
+    .select({ hostParticipantId: rooms.hostParticipantId, state: rooms.state })
+    .from(rooms)
+    .where(eq(rooms.id, roomId))
+    .limit(1);
+  if (!room || room.state !== "NOMINATIONS_LOCKED")
+    throw new DomainError(
+      "TOURNAMENT_NOT_READY",
+      "Nominations are not ready for automatic tournament start.",
+      409,
+    );
+  if (!room.hostParticipantId)
+    throw new DomainError(
+      "HOST_REQUIRED",
+      "The room has no host to start its tournament.",
+      409,
+    );
+  return startTournament(ctx, room.hostParticipantId, roomId, {
+    format: 8,
+    voteDurationSeconds: 30,
+  });
+}
+
 export async function submitVote(
   ctx: DomainContext,
   participantId: string,

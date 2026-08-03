@@ -194,6 +194,7 @@ export const RoomSnapshotSchema = z.object({
   displays: z.array(DisplayDtoSchema),
   rules: HouseRulesSchema,
   nominationDeadline: z.iso.datetime().nullable(),
+  nominationAutoStartAt: z.iso.datetime().nullable(),
   nominationsRevealed: z.boolean(),
   nominationProgress: z.object({
     submittedParticipants: z.number().int().nonnegative(),

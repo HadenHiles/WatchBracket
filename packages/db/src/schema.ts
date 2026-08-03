@@ -62,11 +62,13 @@ export const rooms = pgTable('rooms', {
   hostParticipantId: uuid('host_participant_id').references((): AnyPgColumn => participants.id),
   lockedAt: timestamp('locked_at', { withTimezone: true }),
   nominationDeadline: timestamp('nomination_deadline', { withTimezone: true }),
+  nominationAutoStartAt: timestamp('nomination_auto_start_at', { withTimezone: true }),
+  nominationPausedSeconds: integer('nomination_paused_seconds'),
   nominationsRevealedAt: timestamp('nominations_revealed_at', { withTimezone: true }),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   version: bigint('version', { mode: 'number' }).notNull().default(0),
   ...timestamps
-}, (table) => [uniqueIndex('rooms_code_uq').on(table.code), index('rooms_expiration_idx').on(table.state, table.expiresAt), index('rooms_nomination_deadline_idx').on(table.state, table.nominationDeadline)]);
+}, (table) => [uniqueIndex('rooms_code_uq').on(table.code), index('rooms_expiration_idx').on(table.state, table.expiresAt), index('rooms_nomination_deadline_idx').on(table.state, table.nominationDeadline), index('rooms_nomination_auto_start_idx').on(table.state, table.nominationAutoStartAt)]);
 
 export const watchBracketHistory = pgTable('watch_bracket_history', {
   id: uuid('id').primaryKey().defaultRandom(),

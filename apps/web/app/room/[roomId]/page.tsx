@@ -206,6 +206,7 @@ export default function RoomPage() {
     [snapshot],
   );
   const countdown = useCountdown(snapshot?.nominationDeadline);
+  const autoStartCountdown = useCountdown(snapshot?.nominationAutoStartAt);
   const voteCountdown = useCountdown(
     snapshot?.tournament?.activeMatchup?.deadline,
   );
@@ -389,6 +390,7 @@ export default function RoomPage() {
       </main>
     );
   const nominating = snapshot.state === "NOMINATING";
+  const autoStarting = nominating && snapshot.nominationAutoStartAt !== null;
   const revealed = snapshot.state === "NOMINATIONS_LOCKED";
   const champion = snapshot.tournament?.champion;
   const winnerActionUrl = champion?.localAvailability?.plexUrl ?? champion?.requestAvailability?.requestUrl ?? champion?.availability?.link ?? window.location.href;
@@ -636,11 +638,13 @@ export default function RoomPage() {
                 {snapshot.nominationProgress.totalParticipants} have picked
               </h2>
               <p className="muted">
-                {snapshot.nominationProgress.lockedParticipants} locked in
+                {autoStarting
+                  ? "Everyone locked in · starting automatically"
+                  : `${snapshot.nominationProgress.lockedParticipants} locked in`}
               </p>
             </div>
-            <div className="timer" aria-label={`${countdown} remaining`}>
-              {countdown}
+            <div className="timer" aria-label={`${autoStarting ? autoStartCountdown : countdown} remaining`}>
+              {autoStarting ? autoStartCountdown : countdown}
             </div>
           </section>
           <section className="card nomination-dock" aria-label="Your pinned picks">
@@ -650,8 +654,8 @@ export default function RoomPage() {
                 <h2>Your double feature</h2>
               </div>
               <div className="dock-timer" aria-label={`${countdown} remaining`}>
-                <small>Time left</small>
-                <strong>{countdown}</strong>
+                <small>{autoStarting ? "Starts in" : "Time left"}</small>
+                <strong>{autoStarting ? autoStartCountdown : countdown}</strong>
               </div>
             </div>
             {selectedItem && !snapshot.viewerReady && (
@@ -718,6 +722,11 @@ export default function RoomPage() {
             >
               {snapshot.viewerReady ? "Edit picks" : "Lock in both picks"}
             </button>
+            {autoStarting && (
+              <p className="notice" role="status">
+                Need a change? Tap Edit picks within 10 seconds. Your unused nomination time will be restored.
+              </p>
+            )}
           </section>
           <section className="card stack plex-suggestions">
             <div className="actions spread">
@@ -848,7 +857,7 @@ export default function RoomPage() {
               ))}
             </div>
           </section>
-          {host && (
+          {host && !autoStarting && (
             <section className="card stack">
               <h2>Host timer controls</h2>
               <div className="actions">

@@ -28,6 +28,7 @@ export const NominationProgressSceneSchema = z.object({
   roomName: z.string(),
   roomCode: z.string(),
   deadline: z.iso.datetime().nullable(),
+  autoStartAt: z.iso.datetime().nullable(),
   submittedParticipants: z.number().int().nonnegative(),
   lockedParticipants: z.number().int().nonnegative(),
   totalParticipants: z.number().int().nonnegative(),

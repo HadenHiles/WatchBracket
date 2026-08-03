@@ -437,32 +437,44 @@ export async function buildApp(env: GameApiEnv) {
       };
     },
   );
-  app.get("/api/rooms/:roomId/snapshot", async (request) => {
-    const { roomId } = parse(ParamsRoomSchema, request.params);
-    const participant = await resolveParticipant(
-      context,
-      request.cookies[COOKIE.participant],
-    );
-    if (participant?.roomId === roomId)
-      return getSnapshot(
-        app.db,
-        roomId,
-        participant.role === "HOST" ? "HOST" : "PARTICIPANT",
-        realtime.presence,
-        participant.id,
+  app.get(
+    "/api/rooms/:roomId/snapshot",
+    {
+      config: {
+        rateLimit: {
+          max: 600,
+          timeWindow: "1 minute",
+          groupId: "room-snapshots",
+        },
+      },
+    },
+    async (request) => {
+      const { roomId } = parse(ParamsRoomSchema, request.params);
+      const participant = await resolveParticipant(
+        context,
+        request.cookies[COOKIE.participant],
       );
-    const display = await resolveDisplay(
-      context,
-      request.cookies[COOKIE.display],
-    );
-    if (display?.roomId === roomId)
-      return getSnapshot(app.db, roomId, "DISPLAY", realtime.presence);
-    throw new DomainError(
-      "ROOM_SESSION_REQUIRED",
-      "A room-scoped session is required.",
-      401,
-    );
-  });
+      if (participant?.roomId === roomId)
+        return getSnapshot(
+          app.db,
+          roomId,
+          participant.role === "HOST" ? "HOST" : "PARTICIPANT",
+          realtime.presence,
+          participant.id,
+        );
+      const display = await resolveDisplay(
+        context,
+        request.cookies[COOKIE.display],
+      );
+      if (display?.roomId === roomId)
+        return getSnapshot(app.db, roomId, "DISPLAY", realtime.presence);
+      throw new DomainError(
+        "ROOM_SESSION_REQUIRED",
+        "A room-scoped session is required.",
+        401,
+      );
+    },
+  );
   app.post("/api/rooms/:roomId/lock", async (request) => {
     await mutationGuard(request);
     const { roomId } = parse(ParamsRoomSchema, request.params);
@@ -997,25 +1009,38 @@ export async function buildApp(env: GameApiEnv) {
       };
     },
   );
-  app.get("/api/displays/:displaySessionId/snapshot", async (request) => {
-    const { displaySessionId } = parse(ParamsDisplaySchema, request.params);
-    const authorization = request.headers.authorization;
-    const bearer =
-      typeof authorization === "string" && authorization.startsWith("Bearer ")
-        ? authorization.slice(7)
-        : undefined;
-    const display = await resolveDisplay(
-      context,
-      request.cookies[COOKIE.display] ?? bearer,
-    );
-    if (!display || display.id !== displaySessionId)
-      throw new DomainError(
-        "DISPLAY_SESSION_REQUIRED",
-        "A valid display session is required.",
-        401,
+  app.get(
+    "/api/displays/:displaySessionId/snapshot",
+    {
+      config: {
+        rateLimit: {
+          max: 600,
+          timeWindow: "1 minute",
+          groupId: "display-snapshots",
+        },
+      },
+    },
+    async (request) => {
+      const { displaySessionId } = parse(ParamsDisplaySchema, request.params);
+      const authorization = request.headers.authorization;
+      const bearer =
+        typeof authorization === "string" &&
+        authorization.startsWith("Bearer ")
+          ? authorization.slice(7)
+          : undefined;
+      const display = await resolveDisplay(
+        context,
+        request.cookies[COOKIE.display] ?? bearer,
       );
-    return getSnapshot(app.db, display.roomId, "DISPLAY", realtime.presence);
-  });
+      if (!display || display.id !== displaySessionId)
+        throw new DomainError(
+          "DISPLAY_SESSION_REQUIRED",
+          "A valid display session is required.",
+          401,
+        );
+      return getSnapshot(app.db, display.roomId, "DISPLAY", realtime.presence);
+    },
+  );
   app.delete("/api/displays/:displaySessionId", async (request) => {
     await mutationGuard(request);
     const { displaySessionId } = parse(ParamsDisplaySchema, request.params);

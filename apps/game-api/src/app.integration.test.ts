@@ -91,7 +91,9 @@ suite('Milestones 1 through 3 API against PostgreSQL', () => {
     expect((await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/lock`, headers: hostHeaders, payload: {} })).json()).toMatchObject({ locked: true });
     expect((await app.inject({ method: 'POST', url: '/api/rooms/join', headers: origin, payload: { roomCode: created.code, nickname: 'Alex' } })).statusCode).toBe(423);
     expect((await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/unlock`, headers: hostHeaders, payload: {} })).json()).toMatchObject({ locked: false });
-    expect((await app.inject({ method: 'POST', url: '/api/rooms/join', headers: origin, payload: { roomCode: created.code, nickname: 'Alex' } })).statusCode).toBe(200);
+    const alexJoin = await app.inject({ method: 'POST', url: '/api/rooms/join', headers: origin, payload: { roomCode: created.code, nickname: 'Alex' } });
+    expect(alexJoin.statusCode).toBe(200);
+    const alexCsrf = cookieValue(alexJoin, 'wb_csrf'); const alexParticipant = cookieValue(alexJoin, 'wb_participant');
 
     const expiredCode = await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/display-pairing-codes`, headers: hostHeaders, payload: {} });
     await inspector.db.update(displayPairingCodes).set({ expiresAt: new Date(0) }).where(eq(displayPairingCodes.codeHash, (await inspector.db.select().from(displayPairingCodes).orderBy(displayPairingCodes.createdAt).limit(1))[0]!.codeHash));
@@ -125,6 +127,7 @@ suite('Milestones 1 through 3 API against PostgreSQL', () => {
     const rules = { preset: 'QUICK_PICK', nominationDurationSeconds: 30, nominationSlots: 2, revealMode: 'AFTER_DEADLINE' };
     expect((await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/nominations/start`, headers: hostHeaders, payload: { rules } })).statusCode).toBe(200);
     const guestHeaders = { ...origin, cookie: cookieHeader({ wb_participant: guestParticipant, wb_csrf: guestCsrf }), 'x-csrf-token': guestCsrf };
+    const alexHeaders = { ...origin, cookie: cookieHeader({ wb_participant: alexParticipant, wb_csrf: alexCsrf }), 'x-csrf-token': alexCsrf };
     for (const [headers, rank, catalogKey] of [[hostHeaders, 1, firstTitle.catalogKey], [hostHeaders, 2, secondTitle.catalogKey], [guestHeaders, 1, firstTitle.catalogKey], [guestHeaders, 2, secondTitle.catalogKey]] as const) {
       expect((await app.inject({ method: 'PUT', url: `/api/rooms/${created.roomId}/submissions/${rank}`, headers, payload: { catalogKey } })).statusCode).toBe(200);
     }
@@ -155,11 +158,13 @@ suite('Milestones 1 through 3 API against PostgreSQL', () => {
       const firstVote = await app.inject({ method: 'POST', url: `/api/matchups/${active.id}/vote`, headers: hostHeaders, payload: { candidateId: active.candidateA.id, abstain: false } });
       expect(firstVote.statusCode).toBe(200); expect(firstVote.json()).toMatchObject({ allVotesReceived: false });
       expect((await app.inject({ method: 'POST', url: `/api/matchups/${active.id}/vote`, headers: hostHeaders, payload: { candidateId: active.candidateB.id, abstain: false } })).statusCode).toBe(200);
-      const finalVote = await app.inject({ method: 'POST', url: `/api/matchups/${active.id}/vote`, headers: guestHeaders, payload: { abstain: true } });
+      const guestVote = await app.inject({ method: 'POST', url: `/api/matchups/${active.id}/vote`, headers: guestHeaders, payload: { abstain: true } });
+      expect(guestVote.statusCode).toBe(200); expect(guestVote.json()).toMatchObject({ allVotesReceived: false });
+      const finalVote = await app.inject({ method: 'POST', url: `/api/matchups/${active.id}/vote`, headers: alexHeaders, payload: { candidateId: active.candidateB.id, abstain: false } });
       expect(finalVote.statusCode).toBe(200); expect(finalVote.json()).toMatchObject({ allVotesReceived: true });
       expect((await processTournamentTransition({ db: inspector.db, env }, created.roomId)).changed).toBe(false);
       const resultSnapshot = (await app.inject({ method: 'GET', url: `/api/displays/${castSession.displaySessionId}/snapshot`, headers: { authorization: `Bearer ${castSession.displayToken}` } })).json();
-      expect(resultSnapshot).toMatchObject({ state: 'MATCHUP_RESULT', tournament: { activeMatchup: { sequence: matchupNumber, votesReceived: 2 } } });
+      expect(resultSnapshot).toMatchObject({ state: 'MATCHUP_RESULT', tournament: { activeMatchup: { sequence: matchupNumber, votesReceived: 3 } } });
       expect((await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/tournament/skip-presentation`, headers: hostHeaders, payload: {} })).statusCode).toBe(200);
     }
     const winnerSnapshot = (await app.inject({ method: 'GET', url: `/api/rooms/${created.roomId}/snapshot`, headers: { cookie: hostRoomCookies } })).json();

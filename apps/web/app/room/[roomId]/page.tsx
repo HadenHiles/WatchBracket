@@ -314,7 +314,9 @@ export default function RoomPage() {
         catalogKey,
       })
     )
-      setSelectedItem(undefined);
+      setSelectedItem((current) =>
+        current?.catalogKey === catalogKey ? undefined : current,
+      );
   }
   async function loadPlexWatchlist() {
     const response = await api<{ items: CatalogItem[] }>(

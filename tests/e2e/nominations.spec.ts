@@ -15,9 +15,12 @@ async function makePicks(page: Page) {
   await expect(posters.first()).toBeVisible({ timeout: 15_000 });
   await expect.poll(() => posters.count()).toBeGreaterThan(1);
   await posters.nth(0).click();
+  await expect(posters.nth(0)).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: /^Pick 1:/ }).click();
   await posters.nth(1).click();
+  await expect(posters.nth(1)).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: /^Pick 2:/ }).click();
+  await expect(page.getByRole('button', { name: /^Pick 2:(?! empty)/ })).toBeVisible();
   await page.getByRole('button', { name: 'Lock in both picks' }).click();
 }
 

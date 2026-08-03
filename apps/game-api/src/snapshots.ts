@@ -219,6 +219,7 @@ function parseRequestAvailability(value: unknown) {
 export function toDisplayScene(
   snapshot: RoomSnapshot,
   publicAppUrl: string,
+  winnerDisplayMode: "AUTO" | "PODIUM" | "BRACKET" = "AUTO",
 ): DisplayScene {
   if (snapshot.state === "LOBBY" || snapshot.state === "EXPIRED")
     return {
@@ -288,6 +289,7 @@ export function toDisplayScene(
       roomName: snapshot.name,
       roomCode: snapshot.code,
       joinUrl: `${publicAppUrl}/join/${snapshot.code}`,
+      displayMode: winnerDisplayMode,
       winner: sceneCandidate(champion),
       podium: tournament.podium.map((item) => ({
         ...sceneCandidate(item),
@@ -299,6 +301,16 @@ export function toDisplayScene(
           stage: result.stage,
           opponentTitle: result.loserTitle,
         })),
+      bracket: tournament.bracket.map((result) => ({
+        key: result.key,
+        stage: result.stage,
+        sequence: result.sequence,
+        winnerTitle: result.winnerTitle,
+        loserTitle: result.loserTitle,
+        winnerVotes: result.winnerVotes,
+        loserVotes: result.loserVotes,
+        abstentions: result.abstentions,
+      })),
       actionUrl,
       actionLabel,
       tasteSnapshot: tournament.tasteSnapshot,

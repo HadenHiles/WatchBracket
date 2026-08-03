@@ -169,6 +169,9 @@ export const TournamentSnapshotSchema = z.object({
       loserId: z.uuid(),
       winnerTitle: z.string(),
       loserTitle: z.string(),
+      winnerVotes: z.number().int().nonnegative(),
+      loserVotes: z.number().int().nonnegative(),
+      abstentions: z.number().int().nonnegative(),
     }),
   ),
 });

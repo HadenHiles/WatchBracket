@@ -171,6 +171,9 @@ suite('Milestones 1 through 3 API against PostgreSQL', () => {
       expect.objectContaining({ placement: 3 }),
     ]);
     expect(winnerSnapshot.tournament.tasteSnapshot).toMatchObject({ dominantGenres: expect.any(Array) });
+    expect(winnerSnapshot.tournament.bracket[0]).toMatchObject({ winnerVotes: expect.any(Number), loserVotes: expect.any(Number), abstentions: expect.any(Number) });
+    expect((await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/winner/display-mode`, headers: guestHeaders, payload: { mode: 'BRACKET' } })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/winner/display-mode`, headers: hostHeaders, payload: { mode: 'BRACKET' } })).json()).toEqual({ mode: 'BRACKET' });
     expect(await inspector.db.select().from(watchBracketHistory).where(eq(watchBracketHistory.roomId, created.roomId))).toHaveLength(1);
     const replayRoom = await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/run-it-back`, headers: hostHeaders, payload: {} });
     expect(replayRoom.statusCode).toBe(200); expect(replayRoom.json()).toMatchObject({ participantCount: 3 });

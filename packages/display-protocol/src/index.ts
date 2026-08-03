@@ -137,6 +137,7 @@ export const MatchupResultSceneSchema = z.object({
 export const WinnerSceneSchema = z.object({
   type: z.literal("WINNER"),
   ...RoomIdentityFields,
+  displayMode: z.enum(["AUTO", "PODIUM", "BRACKET"]),
   winner: TournamentCandidateSceneSchema,
   podium: z.array(TournamentCandidateSceneSchema.extend({
     placement: z.union([z.literal(1), z.literal(2), z.literal(3)]),
@@ -144,6 +145,16 @@ export const WinnerSceneSchema = z.object({
   path: z.array(
     z.object({ stage: TournamentStageSceneSchema, opponentTitle: z.string() }),
   ),
+  bracket: z.array(z.object({
+    key: z.string(),
+    stage: TournamentStageSceneSchema,
+    sequence: z.number().int().positive(),
+    winnerTitle: z.string(),
+    loserTitle: z.string(),
+    winnerVotes: z.number().int().nonnegative(),
+    loserVotes: z.number().int().nonnegative(),
+    abstentions: z.number().int().nonnegative(),
+  })),
   actionUrl: z.url(),
   actionLabel: z.string(),
   tasteSnapshot: z.object({

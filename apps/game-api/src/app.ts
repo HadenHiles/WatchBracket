@@ -135,6 +135,9 @@ const WinnerRequestSchema = z.object({
   confirm: z.literal(true),
   tvSeasonPolicy: z.enum(["FIRST", "LATEST", "ALL"]).optional(),
 });
+const WinnerDisplayModeSchema = z.object({
+  mode: z.enum(["PODIUM", "BRACKET"]),
+});
 const ParamsRoomSchema = z.object({ roomId: z.uuid() });
 const ParamsDisplaySchema = z.object({ displaySessionId: z.uuid() });
 const ParamsSubmissionSchema = z.object({
@@ -841,6 +844,30 @@ export async function buildApp(env: GameApiEnv) {
       await skipPresentation(context, participant.id, roomId);
       await realtime.broadcastRoom(roomId, "bracket:updated");
       return { skipped: true };
+    },
+  );
+  app.post(
+    "/api/rooms/:roomId/winner/display-mode",
+    async (request) => {
+      await mutationGuard(request);
+      const { roomId } = parse(ParamsRoomSchema, request.params);
+      const { mode } = parse(WinnerDisplayModeSchema, request.body);
+      const participant = await resolveParticipant(
+        context,
+        request.cookies[COOKIE.participant],
+      );
+      if (
+        !participant ||
+        participant.roomId !== roomId ||
+        participant.role !== "HOST"
+      )
+        throw new DomainError(
+          "HOST_REQUIRED",
+          "Only the room host can change the shared winner view.",
+          403,
+        );
+      await realtime.setWinnerDisplayMode(roomId, mode);
+      return { mode };
     },
   );
   app.post(

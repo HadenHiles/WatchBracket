@@ -13,9 +13,9 @@ describe('private media integrations', () => {
       expect(requestUrl.searchParams.get('includeGuids')).toBe('1');
       return json({ MediaContainer: { Metadata: [{ ratingKey: '99', title: 'Dune', year: 2021, Guid: [{ id: 'tmdb://438631' }] }] } });
     });
-    const result = await new PlexProvider('http://plex.local:32400', 'super-secret-token', 'https://plex.example.test', fetcher as typeof fetch).inventory();
+    const result = await new PlexProvider('http://plex.local:32400', 'super-secret-token', fetcher as typeof fetch).inventory();
     expect(result.items[0]).toMatchObject({ tmdbId: 438631, ratingKey: '99', libraryTitle: 'Movies' });
-    expect(result.items[0]?.plexUrl).toBe('https://plex.example.test/web/index.html#!/server/server-1/details?key=%2Flibrary%2Fmetadata%2F99');
+    expect(result.items[0]?.plexUrl).toBe('https://app.plex.tv/desktop/#!/server/server-1/details?key=%2Flibrary%2Fmetadata%2F99');
     expect(JSON.stringify(result)).not.toContain('super-secret-token');
   });
 

@@ -87,10 +87,11 @@ function fixture(mode: string): DisplayScene {
       tieBreak: null,
       deadline,
     };
-  if (mode === "winner")
+  if (mode === "winner" || mode === "bracket")
     return {
       type: "WINNER",
       ...roomIdentity,
+      displayMode: mode === "bracket" ? "BRACKET" : "AUTO",
       winner: { ...candidateB, strikes: 1 },
       podium: [
         { ...candidateB, strikes: 1, placement: 1 },
@@ -107,6 +108,18 @@ function fixture(mode: string): DisplayScene {
         { stage: "QUALIFIER", opponentTitle: "Moonlight Market" },
         { stage: "REDEMPTION", opponentTitle: "Aurora Drift" },
         { stage: "CHAMPIONSHIP_FINAL", opponentTitle: "Kestrel Station" },
+      ],
+      bracket: [
+        { key: "q1", stage: "QUALIFIER", sequence: 1, winnerTitle: "Aurora Drift", loserTitle: "Moonlight Market", winnerVotes: 3, loserVotes: 1, abstentions: 0 },
+        { key: "q2", stage: "QUALIFIER", sequence: 2, winnerTitle: "Kestrel Station", loserTitle: "Crimson Relay", winnerVotes: 2, loserVotes: 1, abstentions: 1 },
+        { key: "q3", stage: "QUALIFIER", sequence: 3, winnerTitle: "Signal Fire", loserTitle: "Night Shift", winnerVotes: 4, loserVotes: 0, abstentions: 0 },
+        { key: "q4", stage: "QUALIFIER", sequence: 4, winnerTitle: "Velvet Orbit", loserTitle: "Last Stop", winnerVotes: 3, loserVotes: 1, abstentions: 0 },
+        { key: "q5", stage: "QUALIFIER", sequence: 5, winnerTitle: "Deep Freeze", loserTitle: "Paper Moon", winnerVotes: 2, loserVotes: 2, abstentions: 0 },
+        { key: "q6", stage: "QUALIFIER", sequence: 6, winnerTitle: "Arcade Hearts", loserTitle: "The Long Way", winnerVotes: 3, loserVotes: 1, abstentions: 0 },
+        { key: "q7", stage: "QUALIFIER", sequence: 7, winnerTitle: "Blue Hour", loserTitle: "Open Water", winnerVotes: 3, loserVotes: 0, abstentions: 1 },
+        { key: "q8", stage: "QUALIFIER", sequence: 8, winnerTitle: "Good Company", loserTitle: "Static Summer", winnerVotes: 4, loserVotes: 0, abstentions: 0 },
+        { key: "r1", stage: "REDEMPTION", sequence: 9, winnerTitle: "The Quietest Heist", loserTitle: "Aurora Drift", winnerVotes: 3, loserVotes: 1, abstentions: 0 },
+        { key: "f1", stage: "CHAMPIONSHIP_FINAL", sequence: 10, winnerTitle: "The Quietest Heist", loserTitle: "Kestrel Station", winnerVotes: 3, loserVotes: 1, abstentions: 0 },
       ],
       actionUrl: "https://app.plex.tv/desktop/#!/server/demo/details",
       actionLabel: "Open in Plex",
@@ -134,7 +147,7 @@ export default function TestMode() {
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
     const requested = query.get("scene");
-    if (["lobby", "nominations", "intro", "voting", "result", "winner"].includes(requested ?? "")) setMode(requested!);
+    if (["lobby", "nominations", "intro", "voting", "result", "winner", "bracket"].includes(requested ?? "")) setMode(requested!);
     setDemo(query.get("demo") === "1");
   }, []);
   const width = preset === "720p" ? 1280 : 1920;
@@ -153,7 +166,7 @@ export default function TestMode() {
       style={{
         background: "#030305",
         minHeight: "100vh",
-        padding: 16,
+        padding: demo ? 0 : 16,
         color: "white",
         fontFamily: "system-ui",
       }}
@@ -182,6 +195,7 @@ export default function TestMode() {
               "voting",
               "result",
               "winner",
+              "bracket",
             ].map((value) => (
               <option key={value}>{value}</option>
             ))}

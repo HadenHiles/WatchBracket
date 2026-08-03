@@ -34,12 +34,11 @@ For winner buttons that work outside your home network, set the internal and pub
 
 ```env
 PLEX_BASE_URL=http://plex:32400
-PLEX_PUBLIC_URL=https://plex.example.com
 SEERR_BASE_URL=http://jellyseerr:5055
 SEERR_PUBLIC_URL=https://jellyseerr.example.com
 ```
 
-`PLEX_PUBLIC_URL` and `SEERR_PUBLIC_URL` are safe, credential-free destinations shown to players. Tokens and API keys remain private in `.env.integration.production`.
+Plex winner actions use canonical `app.plex.tv` deep links so supported devices can hand them to the Plex app. `SEERR_PUBLIC_URL` is the safe, credential-free Jellyseerr destination shown to players. Tokens and API keys remain private in `.env.integration.production`.
 
 Start everything—including PostgreSQL migrations—with:
 

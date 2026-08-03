@@ -12,7 +12,7 @@ const app = Fastify({ logger: { redact: ['req.headers.authorization', 'req.heade
 const configured = (value?: string) => Boolean(value && !value.toLowerCase().includes('replace-me'));
 const authorized = (request: { headers: Record<string, unknown> }) => request.headers['x-integration-secret'] === env.INTEGRATION_SERVICE_SHARED_SECRET;
 const tmdb = new TmdbProvider(env.TMDB_API_READ_TOKEN);
-const plex = new PlexProvider(env.PLEX_BASE_URL, env.PLEX_TOKEN, env.PLEX_PUBLIC_URL);
+const plex = new PlexProvider(env.PLEX_BASE_URL, env.PLEX_TOKEN);
 const tautulli = new TautulliProvider(env.TAUTULLI_BASE_URL, env.TAUTULLI_API_KEY);
 const seerr = new SeerrProvider(env.SEERR_BASE_URL, env.SEERR_API_KEY, env.SEERR_PUBLIC_URL);
 const participantPlex = new ParticipantPlexAccounts(database.db, env.INTEGRATION_SERVICE_SHARED_SECRET);
@@ -28,7 +28,7 @@ app.get('/internal/setup/status', async (request, reply) => {
   const [plexStatus, tautulliStatus, seerrStatus] = await Promise.all([probe(plex), probe(tautulli), probe(seerr)]);
   return { providers: {
     TMDB: { configured: configured(env.TMDB_API_READ_TOKEN), requiredVariables: ['TMDB_API_READ_TOKEN'] },
-    PLEX: { ...plexStatus, requiredVariables: ['PLEX_BASE_URL', 'PLEX_PUBLIC_URL', 'PLEX_TOKEN'] },
+    PLEX: { ...plexStatus, requiredVariables: ['PLEX_BASE_URL', 'PLEX_TOKEN'] },
     TAUTULLI: { ...tautulliStatus, requiredVariables: ['TAUTULLI_BASE_URL', 'TAUTULLI_API_KEY'] },
     SEERR: { ...seerrStatus, requiredVariables: ['SEERR_BASE_URL', 'SEERR_PUBLIC_URL', 'SEERR_API_KEY'] }
   } };

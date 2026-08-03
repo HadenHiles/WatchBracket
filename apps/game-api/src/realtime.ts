@@ -26,6 +26,7 @@ export type RealtimeRuntime = ReturnType<typeof createRealtime>;
 export function createRealtime(app: FastifyInstance, env: GameApiEnv) {
   const participantConnections = new Map<string, number>();
   const displayConnections = new Map<string, number>();
+  const winnerDisplayModes = new Map<string, "PODIUM" | "BRACKET">();
   const presence: Presence = {
     participantIds: new Set(),
     displayIds: new Set()
@@ -76,11 +77,15 @@ export function createRealtime(app: FastifyInstance, env: GameApiEnv) {
       if (actor?.kind !== 'DISPLAY') continue;
       const snapshot = await getSnapshot(app.db, roomId, 'DISPLAY', presence);
       if (eventName === 'display:snapshot' || snapshot.state === 'EXPIRED') socket.emit('display:snapshot', envelope(roomId, snapshot.sequence, snapshot));
-      else socket.emit(eventName, sceneEnvelope(roomId, snapshot.sequence, toDisplayScene(snapshot, env.PUBLIC_ALIAS_URL)));
+      else socket.emit(eventName, sceneEnvelope(roomId, snapshot.sequence, toDisplayScene(snapshot, env.PUBLIC_ALIAS_URL, winnerDisplayModes.get(roomId) ?? "AUTO")));
     }
   }
   async function broadcastRoom(roomId: string, controllerEvent = 'room:snapshot') {
     await Promise.all([emitToControllers(roomId, controllerEvent), emitToDisplays(roomId)]);
+  }
+  async function setWinnerDisplayMode(roomId: string, mode: "PODIUM" | "BRACKET") {
+    winnerDisplayModes.set(roomId, mode);
+    await emitToDisplays(roomId);
   }
   async function revokeDisplaySocket(displayId: string, roomId: string, bump = true, reason = 'REVOKED') {
     const sockets = await io.in(`display-session:${displayId}`).fetchSockets();
@@ -135,5 +140,5 @@ export function createRealtime(app: FastifyInstance, env: GameApiEnv) {
     });
   });
 
-  return { io, presence, broadcastRoom, revokeDisplaySocket, close: () => io.close() };
+  return { io, presence, broadcastRoom, setWinnerDisplayMode, revokeDisplaySocket, close: () => io.close() };
 }

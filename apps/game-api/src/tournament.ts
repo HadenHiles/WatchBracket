@@ -1039,6 +1039,15 @@ export async function getTournamentData(
       loserId: result.loserId,
       winnerTitle: media(result.winnerId).title,
       loserTitle: media(result.loserId).title,
+      winnerVotes:
+        result.winnerId === result.matchup.candidateAId
+          ? result.votesA
+          : result.votesB,
+      loserVotes:
+        result.loserId === result.matchup.candidateAId
+          ? result.votesA
+          : result.votesB,
+      abstentions: result.abstentions,
     })),
   };
 }
@@ -1075,7 +1084,11 @@ export async function refreshChampionPlexAvailability(
     typeof metadata.localAvailability === "object"
       ? (metadata.localAvailability as Record<string, unknown>)
       : undefined;
-  if (typeof current?.plexUrl === "string" && current.plexUrl) return false;
+  if (
+    typeof current?.plexUrl === "string" &&
+    current.plexUrl.startsWith("https://app.plex.tv/")
+  )
+    return false;
 
   const inventory = await getPlexInventory(ctx);
   const local = inventory.items.find(

@@ -62,7 +62,7 @@ export class PlexProvider {
   private readonly client: PrivateProviderClient;
   private inventoryCache?: { expiresAt: number; value: Awaited<ReturnType<PlexProvider['loadInventory']>> };
 
-  constructor(baseUrl: string | undefined, token: string | undefined, private readonly publicUrl?: string, fetcher: Fetcher = fetch) {
+  constructor(baseUrl: string | undefined, token: string | undefined, fetcher: Fetcher = fetch) {
     this.client = new PrivateProviderClient('Plex', baseUrl, token ? { 'X-Plex-Token': token, 'X-Plex-Product': 'Watch Bracket', 'X-Plex-Client-Identifier': 'watch-bracket-integration' } : {}, fetcher);
   }
   get configured() { return this.client.configured; }
@@ -96,11 +96,7 @@ export class PlexProvider {
   }
   private titleUrl(machineIdentifier: string, ratingKey: string) {
     const path = encodeURIComponent(`/library/metadata/${ratingKey}`);
-    if (!this.publicUrl)
-      return `https://app.plex.tv/desktop/#!/server/${encodeURIComponent(machineIdentifier)}/details?key=${path}`;
-    const url = new URL('/web/index.html', this.publicUrl);
-    url.hash = `!/server/${encodeURIComponent(machineIdentifier)}/details?key=${path}`;
-    return url.toString();
+    return `https://app.plex.tv/desktop/#!/server/${encodeURIComponent(machineIdentifier)}/details?key=${path}`;
   }
 
   async inventory(libraryIds?: string[], force = false) {

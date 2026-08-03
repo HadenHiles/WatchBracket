@@ -111,6 +111,7 @@ describe("Cast launch protocol", () => {
         roomName: "Friday",
         roomCode: "ABC123",
         joinUrl: "https://example.test/join/ABC123",
+        displayMode: "AUTO",
         winner: candidateB,
         podium: [
           { ...candidateB, placement: 1 },
@@ -118,6 +119,7 @@ describe("Cast launch protocol", () => {
           { ...candidateA, placement: 3 },
         ],
         path: [{ stage: "CHAMPIONSHIP_FINAL", opponentTitle: "Aurora Drift" }],
+        bracket: [{ key: "final", stage: "CHAMPIONSHIP_FINAL", sequence: 9, winnerTitle: candidateB.title, loserTitle: candidateA.title, winnerVotes: 3, loserVotes: 1, abstentions: 0 }],
         actionUrl: "https://example.com/winner",
         actionLabel: "View winner",
         tasteSnapshot: null,

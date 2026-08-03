@@ -213,6 +213,30 @@ button.text-button:hover { color: var(--ink); box-shadow: none; transform: none;
 .catalog-item, .candidate, .winner-poster { animation: tape-drop .42s cubic-bezier(.2,.8,.2,1) both; }
 .catalog-item:nth-child(2n) { animation-delay: 60ms; } .catalog-item:nth-child(3n) { animation-delay: 120ms; }
 .winner-controller > h1 { animation: winner-glow 1.8s ease-in-out 3; }
+.winner-display-toggle { position: absolute; top: .25rem; right: .25rem; z-index: 4!important; width: 48px; min-height: 48px; padding: .55rem; border-radius: 50%; }
+.winner-display-toggle svg { display: block; width: 100%; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.2; }
+.taste-snapshot-playful { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 1rem; overflow: hidden; border-color: var(--accent); background: linear-gradient(115deg,#ef3e46,#922960 52%,#174aa2); box-shadow: 7px 8px 0 #020a25; text-align: left; transform: rotate(-.35deg); }
+.taste-snapshot-playful h2 { margin: .1em 0; font-size: clamp(1.35rem,6vw,2.3rem); line-height: 1; }
+.taste-snapshot-playful p { margin: .35rem 0; }
+.taste-popcorn { display: grid; place-items: center; width: clamp(60px,18vw,96px); aspect-ratio: 1; border: 3px solid #fff7bc; border-radius: 50%; background: var(--accent); font-size: clamp(2rem,9vw,4rem); box-shadow: 4px 5px 0 #020a25; transform: rotate(-8deg); }
+.bracket-results-card { overflow: hidden; }
+.bracket-results-heading { display: flex; align-items: end; justify-content: space-between; gap: 1rem; margin-bottom: .8rem; }
+.bracket-results-heading h2,.bracket-results-heading p { margin: 0; }
+.bracket-results-heading>strong { color: var(--accent); font-family: Impact,sans-serif; font-size: 2rem; }
+.bracket-results-card .wb-elimination-bracket { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(155px,1fr); gap: .8rem; padding: .5rem .2rem 1rem; overflow-x: auto; }
+.bracket-results-card .wb-bracket-round { display: grid; grid-template-rows: auto 1fr; min-width: 0; }
+.bracket-results-card .wb-bracket-round>h3 { margin: .2rem 0 .55rem; color: var(--cyan); font-size: .72rem; letter-spacing: .08em; text-align: center; text-transform: uppercase; }
+.bracket-results-card .wb-bracket-matches { display: flex; flex-direction: column; justify-content: space-around; gap: .65rem; }
+.bracket-results-card .wb-bracket-match { position: relative; display: grid; grid-template-rows: 1fr 1fr; min-width: 0; border: 1px solid #4e79c8; background: #031847; box-shadow: 3px 3px 0 #020a25; }
+.bracket-results-card .wb-bracket-match::after { position: absolute; top: 50%; right: -.85rem; width: .85rem; border-top: 2px solid #4e79c8; content: ""; }
+.bracket-results-card .wb-bracket-round:last-child .wb-bracket-match::after { display: none; }
+.bracket-results-card .wb-bracket-entry { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: .35rem; min-width: 0; padding: .35rem .45rem; font-size: .72rem; line-height: 1.05; }
+.bracket-results-card .wb-bracket-entry+.wb-bracket-entry { border-top: 1px solid #174aa2; }
+.bracket-results-card .wb-bracket-entry span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bracket-results-card .wb-bracket-entry strong { color: var(--accent); }
+.bracket-results-card .wb-bracket-entry.winner { background: #174aa255; color: var(--ink); font-weight: 900; }
+.bracket-results-card .wb-bracket-entry.eliminated { color: #829ac5; text-decoration: line-through; }
+.bracket-results-card .wb-bracket-abstentions { position: absolute; right: .2rem; bottom: -.7rem; color: #829ac5; font-size: .52rem; }
 .tournament-controller { view-transition-name: tournament-controller; }
 .effects-toggle { position: fixed; right: .75rem; bottom: .75rem; z-index: 12; min-height: 44px; padding: .5rem .65rem; font-size: .68rem; opacity: .82; }
 .display-tools { position: fixed; right: 1rem; bottom: 1rem; z-index: 30; display: flex; align-items: center; gap: .6rem; padding: .55rem; border: 1px solid #4e79c8; border-radius: 7px; background: #020a25dd; color: var(--muted); }

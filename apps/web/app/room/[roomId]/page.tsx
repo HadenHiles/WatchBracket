@@ -15,6 +15,7 @@ import {
 import { api } from "../../../lib/api";
 import { useCast } from "../../../lib/use-cast";
 import { BrandLogo } from "../../../components/brand-logo";
+import { EliminationBracket } from "@watch-bracket/display-ui";
 
 const presets: Record<HouseRules["preset"], HouseRules> = {
   QUICK_PICK: {
@@ -69,6 +70,24 @@ function CastGlyph() {
       <path d="M4 15a13 13 0 0 1 13 13" />
     </svg>
   );
+}
+
+function WinnerViewGlyph({ view }: { view: "PODIUM" | "BRACKET" }) {
+  return view === "BRACKET" ? (
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 5h8v6H5zM5 21h8v6H5zM19 13h8v6h-8zM13 8h3v16h-3M16 16h3" /></svg>
+  ) : (
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 20h7v8H4zM13 12h7v16h-7zM22 17h7v11h-7zM16.5 3l1.4 2.8 3.1.5-2.2 2.2.5 3.1-2.8-1.5-2.8 1.5.5-3.1L12 6.3l3.1-.5z" /></svg>
+  );
+}
+
+function tasteQuip(taste: NonNullable<NonNullable<RoomSnapshot["tournament"]>["tasteSnapshot"]>) {
+  if (taste.consensusPercent !== null && taste.consensusPercent >= 75)
+    return "The group chat actually agreed. Historic.";
+  if (taste.closestMatchup?.margin === 1)
+    return "A one-vote nail-biter. The drama started before the movie.";
+  if (taste.surpriseWildcard)
+    return `Plot twist: ${taste.surpriseWildcard} crashed the party.`;
+  return "The couch understood the assignment.";
 }
 
 function playRoomCue(state: RoomSnapshot["state"]) {
@@ -130,6 +149,7 @@ export default function RoomPage() {
   const [tvSeasonPolicy, setTvSeasonPolicy] = useState<"FIRST" | "LATEST" | "ALL">("FIRST");
   const [winnerActionPending, setWinnerActionPending] = useState(false);
   const [effectsEnabled, setEffectsEnabled] = useState(false);
+  const [displayWinnerView, setDisplayWinnerView] = useState<"AUTO" | "PODIUM" | "BRACKET">("AUTO");
   const previousState = useRef<RoomSnapshot["state"] | undefined>(undefined);
   const searchRequest = useRef(0);
   const plexPollTimer = useRef<number | undefined>(undefined);
@@ -229,6 +249,15 @@ export default function RoomPage() {
   }, [activeMatchup?.id, activeMatchup?.ownVote?.candidateId]);
   const host = snapshot?.viewer === "HOST";
   useEffect(() => {
+    if (snapshot?.state !== "WINNER") {
+      setDisplayWinnerView("AUTO");
+      return;
+    }
+    setDisplayWinnerView("AUTO");
+    const timer = window.setTimeout(() => setDisplayWinnerView("BRACKET"), 10_000);
+    return () => window.clearTimeout(timer);
+  }, [snapshot?.state, snapshot?.tournament?.champion?.id]);
+  useEffect(() => {
     if (snapshot?.state !== "NOMINATING") return;
     const term = query.trim();
     if (term.length < 2) {
@@ -281,6 +310,17 @@ export default function RoomPage() {
       setError(reason instanceof Error ? reason.message : "Request failed");
       return false;
     }
+  }
+  async function toggleWinnerDisplay() {
+    const previous = displayWinnerView;
+    const next = previous === "BRACKET" ? "PODIUM" : "BRACKET";
+    setDisplayWinnerView(next);
+    const changed = await mutate(
+      `/api/rooms/${roomId}/winner/display-mode`,
+      "POST",
+      { mode: next },
+    );
+    if (!changed) setDisplayWinnerView(previous);
   }
   async function pairing() {
     try {
@@ -1060,6 +1100,17 @@ export default function RoomPage() {
           </div>
           {snapshot.state === "WINNER" && snapshot.tournament.champion ? (
             <div className="winner-controller">
+              {host && (
+                <button
+                  type="button"
+                  className="winner-display-toggle secondary"
+                  aria-label={displayWinnerView === "BRACKET" ? "Show podium on TV" : "Show full bracket on TV"}
+                  title={displayWinnerView === "BRACKET" ? "Show podium on TV" : "Show full bracket on TV"}
+                  onClick={() => void toggleWinnerDisplay()}
+                >
+                  <WinnerViewGlyph view={displayWinnerView === "BRACKET" ? "PODIUM" : "BRACKET"} />
+                </button>
+              )}
               <div className="controller-confetti" aria-hidden="true">
                 {Array.from({ length: 32 }, (_, index) => (
                   <i
@@ -1123,7 +1174,17 @@ export default function RoomPage() {
                 </div>
               </div>
               <div className="winner-path"><h2>Winner Journey</h2>{snapshot.tournament.bracket.filter((result)=>result.winnerId===snapshot.tournament!.champion!.id).map((result)=><span className="provider-badge" key={result.key}>Defeated {result.loserTitle}</span>)}</div>
-              {snapshot.tournament.tasteSnapshot && <div className="taste-snapshot"><h2>Group Taste Snapshot</h2><p>{snapshot.tournament.tasteSnapshot.dominantGenres.join(" · ") || "Anything goes"}</p>{snapshot.tournament.tasteSnapshot.consensusPercent !== null && <p>{snapshot.tournament.tasteSnapshot.consensusPercent}% final-round consensus</p>}{snapshot.tournament.tasteSnapshot.closestMatchup && <p>Closest call: {snapshot.tournament.tasteSnapshot.closestMatchup.winnerTitle} by {snapshot.tournament.tasteSnapshot.closestMatchup.margin}</p>}{snapshot.tournament.tasteSnapshot.surpriseWildcard && <p>Surprise wildcard: {snapshot.tournament.tasteSnapshot.surpriseWildcard}</p>}</div>}
+              {snapshot.tournament.tasteSnapshot && (
+                <div className="taste-snapshot taste-snapshot-playful">
+                  <span className="taste-popcorn" aria-hidden="true">🍿</span>
+                  <div>
+                    <p className="kicker">The group vibe</p>
+                    <h2>You guys were in the mood for {snapshot.tournament.tasteSnapshot.dominantGenres.join(" + ") || "a little bit of everything"}.</h2>
+                    <p>{tasteQuip(snapshot.tournament.tasteSnapshot)}</p>
+                    {snapshot.tournament.tasteSnapshot.consensusPercent !== null && <strong>{snapshot.tournament.tasteSnapshot.consensusPercent}% final-round consensus</strong>}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             snapshot.tournament.activeMatchup && (
@@ -1256,22 +1317,16 @@ export default function RoomPage() {
         </section>
       )}
       {snapshot.tournament && snapshot.tournament.bracket.length > 0 && (
-        <details className="card">
-          <summary>
-            Bracket results ({snapshot.tournament.completedMatchups}/
-            {snapshot.tournament.totalMatchups})
-          </summary>
-          <ol className="bracket-list">
-            {snapshot.tournament.bracket.map((result) => (
-              <li key={result.key}>
-                <small>{result.stage.replaceAll("_", " ")}</small>
-                <br />
-                <strong>{result.winnerTitle}</strong> defeated{" "}
-                {result.loserTitle}
-              </li>
-            ))}
-          </ol>
-        </details>
+        <section className="card bracket-results-card">
+          <div className="bracket-results-heading">
+            <div>
+              <p className="kicker">Every elimination</p>
+              <h2>Bracket results</h2>
+            </div>
+            <strong>{snapshot.tournament.completedMatchups}/{snapshot.tournament.totalMatchups}</strong>
+          </div>
+          <EliminationBracket results={snapshot.tournament.bracket} />
+        </section>
       )}
       {host && snapshot.state === "LOBBY" && (
         <section className="card stack">

@@ -47,6 +47,18 @@ const styles: Record<string, CSSProperties> = {
     margin: ".1em 0",
     textShadow: "7px 7px 0 #ef3e46",
   },
+  joinAddress: {
+    width: "fit-content",
+    margin: ".5rem 0",
+    padding: ".35em .55em",
+    border: "2px solid #50c9e8",
+    borderRadius: ".25rem",
+    background: "#031847",
+    color: "#fffbea",
+    fontSize: "clamp(1.25rem, 2.2vw, 2.5rem)",
+    fontWeight: 900,
+    boxShadow: "5px 5px 0 #020a25",
+  },
   participants: {
     display: "grid",
     gap: "1rem",
@@ -219,7 +231,7 @@ export function LobbyDisplay({
       <section>
         <BrandMark src={logoSrc} />
         <h1>{scene.roomName}</h1>
-        <p>Join at bracket.famflix.live</p>
+        <p style={styles.joinAddress}>Join at {new URL(scene.joinUrl).host}</p>
         <div style={styles.code}>{scene.roomCode}</div>
         <div
           style={{

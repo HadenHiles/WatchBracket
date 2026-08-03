@@ -36,7 +36,10 @@ const config: NextConfig = {
   // the rewrite can proxy its polling transport instead of issuing a 308.
   skipTrailingSlashRedirect: true,
   turbopack: { root: resolve(process.cwd(), "../..") },
-  env: { NEXT_PUBLIC_CAST_RECEIVER_APP_ID: castReceiverAppId },
+  env: {
+    NEXT_PUBLIC_CAST_RECEIVER_APP_ID: castReceiverAppId,
+    NEXT_PUBLIC_JOIN_BASE_URL: publicAliasUrl.origin,
+  },
   async rewrites() {
     return [
       { source: "/api/:path*", destination: `${api}/api/:path*` },

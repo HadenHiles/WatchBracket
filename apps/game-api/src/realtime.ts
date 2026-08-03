@@ -76,7 +76,7 @@ export function createRealtime(app: FastifyInstance, env: GameApiEnv) {
       if (actor?.kind !== 'DISPLAY') continue;
       const snapshot = await getSnapshot(app.db, roomId, 'DISPLAY', presence);
       if (eventName === 'display:snapshot' || snapshot.state === 'EXPIRED') socket.emit('display:snapshot', envelope(roomId, snapshot.sequence, snapshot));
-      else socket.emit(eventName, sceneEnvelope(roomId, snapshot.sequence, toDisplayScene(snapshot, env.PUBLIC_APP_URL)));
+      else socket.emit(eventName, sceneEnvelope(roomId, snapshot.sequence, toDisplayScene(snapshot, env.PUBLIC_ALIAS_URL)));
     }
   }
   async function broadcastRoom(roomId: string, controllerEvent = 'room:snapshot') {

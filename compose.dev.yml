@@ -62,7 +62,7 @@ services:
     healthcheck: { test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/"], interval: 10s, timeout: 3s, retries: 10 }
 
   cast-receiver:
-    build: { context: ., dockerfile: infra/docker/cast-receiver.Dockerfile }
+    build: { context: ., dockerfile: infra/docker/cast-receiver.Dockerfile, args: { PUBLIC_ALIAS_URL: "http://vote.localhost:3000" } }
     ports: ["127.0.0.1:3003:8080"]
     healthcheck: { test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/health"], interval: 10s, timeout: 3s, retries: 10 }
 

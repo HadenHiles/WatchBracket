@@ -33,7 +33,7 @@ function fixture(mode: string): DisplayScene {
   const roomIdentity = {
     roomName: "Friday Movie Night",
     roomCode: "7K9MQR",
-    joinUrl: "https://bracket.famflix.live/join/7K9MQR",
+    joinUrl: "https://vote.famflix.live/join/7K9MQR",
   };
   if (mode === "nominations")
     return {
@@ -116,7 +116,7 @@ function fixture(mode: string): DisplayScene {
     type: "LOBBY",
     roomName: "Friday Movie Night",
     roomCode: "7K9MQR",
-    joinUrl: "https://bracket.famflix.live/join/7K9MQR",
+    joinUrl: "https://vote.famflix.live/join/7K9MQR",
     locked: false,
     participants: [
       { nickname: "Haden", role: "HOST", connected: true },

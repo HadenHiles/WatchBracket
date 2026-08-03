@@ -9,6 +9,8 @@ COPY packages/realtime-protocol/package.json packages/realtime-protocol/package.
 RUN pnpm install --frozen-lockfile
 COPY apps/cast-receiver apps/cast-receiver
 COPY packages packages
+ARG PUBLIC_ALIAS_URL=http://vote.localhost:3000
+ENV VITE_PUBLIC_ALIAS_URL=$PUBLIC_ALIAS_URL
 RUN pnpm --filter @watch-bracket/cast-receiver build
 
 FROM nginxinc/nginx-unprivileged:stable-alpine

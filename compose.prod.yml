@@ -91,7 +91,7 @@ services:
   cast-receiver:
     <<: *hardened
     image: ghcr.io/example/watch-bracket-cast-receiver:local
-    build: { context: ., dockerfile: infra/docker/cast-receiver.Dockerfile }
+    build: { context: ., dockerfile: infra/docker/cast-receiver.Dockerfile, args: { PUBLIC_ALIAS_URL: "${PUBLIC_ALIAS_URL}" } }
     networks: [edge]
     healthcheck: { test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/health"], interval: 15s, timeout: 3s, retries: 10 }
     mem_limit: 128m

@@ -14,6 +14,9 @@ import {
 import { api } from "../../../lib/api";
 import { BrandLogo } from "../../../components/brand-logo";
 
+const publicJoinUrl = (code: string) =>
+  new URL(`/join/${code}`, process.env.NEXT_PUBLIC_JOIN_BASE_URL ?? window.location.origin).toString();
+
 function sceneFromSnapshot(value: unknown): DisplayScene {
   const snapshot = RoomSnapshotSchema.parse(value);
   if (snapshot.state === "LOBBY" || snapshot.state === "EXPIRED")
@@ -21,7 +24,7 @@ function sceneFromSnapshot(value: unknown): DisplayScene {
       type: "LOBBY",
       roomName: snapshot.name,
       roomCode: snapshot.code,
-      joinUrl: `${window.location.origin}/join/${snapshot.code}`,
+      joinUrl: publicJoinUrl(snapshot.code),
       locked: snapshot.locked,
       participants: snapshot.participants.map(
         ({ nickname, role, connected }) => ({ nickname, role, connected }),
@@ -74,7 +77,7 @@ function sceneFromSnapshot(value: unknown): DisplayScene {
       type: "WINNER",
       roomName: snapshot.name,
       roomCode: snapshot.code,
-      joinUrl: `${window.location.origin}/join/${snapshot.code}`,
+      joinUrl: publicJoinUrl(snapshot.code),
       winner: candidate(tournament.champion),
       podium: tournament.podium.map((item) => ({
         ...candidate(item),
@@ -94,7 +97,7 @@ function sceneFromSnapshot(value: unknown): DisplayScene {
   const base = {
     roomName: snapshot.name,
     roomCode: snapshot.code,
-    joinUrl: `${window.location.origin}/join/${snapshot.code}`,
+    joinUrl: publicJoinUrl(snapshot.code),
     stage: matchup.stage,
     matchupNumber: matchup.sequence,
     totalMatchups: tournament.totalMatchups,
@@ -125,7 +128,7 @@ function sceneFromSnapshot(value: unknown): DisplayScene {
     type: "MATCHUP_RESULT",
     roomName: snapshot.name,
     roomCode: snapshot.code,
-    joinUrl: `${window.location.origin}/join/${snapshot.code}`,
+    joinUrl: publicJoinUrl(snapshot.code),
     stage: matchup.stage,
     matchupNumber: matchup.sequence,
     totalMatchups: tournament.totalMatchups,
@@ -239,7 +242,7 @@ export default function ActiveDisplay() {
             type: "LOBBY",
             roomName: "Display revoked",
             roomCode: "—",
-            joinUrl: "https://bracket.famflix.live",
+            joinUrl: "https://vote.famflix.live",
             locked: true,
             participants: [],
           }

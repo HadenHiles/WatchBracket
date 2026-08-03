@@ -53,11 +53,13 @@ const ExchangeSchema = z.object({
   expiresAt: z.iso.datetime(),
   protocolVersion: z.literal(1),
 });
+const publicJoinUrl = (code: string) =>
+  new URL(`/join/${code}`, import.meta.env.VITE_PUBLIC_ALIAS_URL ?? window.location.origin).toString();
 const fixture: LobbyScene = {
   type: "LOBBY",
   roomName: "Receiver Test Night",
   roomCode: "7K9MQR",
-  joinUrl: "https://bracket.famflix.live/join/7K9MQR",
+  joinUrl: "https://vote.famflix.live/join/7K9MQR",
   locked: false,
   participants: [
     { nickname: "Haden", role: "HOST", connected: true },
@@ -72,7 +74,7 @@ function toScene(value: unknown): DisplayScene {
       type: "LOBBY",
       roomName: snapshot.name,
       roomCode: snapshot.code,
-      joinUrl: `${window.location.origin}/join/${snapshot.code}`,
+      joinUrl: publicJoinUrl(snapshot.code),
       locked: snapshot.locked,
       participants: snapshot.participants.map(
         ({ nickname, role, connected }) => ({ nickname, role, connected }),
@@ -125,7 +127,7 @@ function toScene(value: unknown): DisplayScene {
       type: "WINNER",
       roomName: snapshot.name,
       roomCode: snapshot.code,
-      joinUrl: `${window.location.origin}/join/${snapshot.code}`,
+      joinUrl: publicJoinUrl(snapshot.code),
       winner: candidate(tournament.champion),
       podium: tournament.podium.map((item) => ({
         ...candidate(item),
@@ -145,7 +147,7 @@ function toScene(value: unknown): DisplayScene {
   const base = {
     roomName: snapshot.name,
     roomCode: snapshot.code,
-    joinUrl: `${window.location.origin}/join/${snapshot.code}`,
+    joinUrl: publicJoinUrl(snapshot.code),
     stage: matchup.stage,
     matchupNumber: matchup.sequence,
     totalMatchups: tournament.totalMatchups,
@@ -176,7 +178,7 @@ function toScene(value: unknown): DisplayScene {
     type: "MATCHUP_RESULT",
     roomName: snapshot.name,
     roomCode: snapshot.code,
-    joinUrl: `${window.location.origin}/join/${snapshot.code}`,
+    joinUrl: publicJoinUrl(snapshot.code),
     stage: matchup.stage,
     matchupNumber: matchup.sequence,
     totalMatchups: tournament.totalMatchups,

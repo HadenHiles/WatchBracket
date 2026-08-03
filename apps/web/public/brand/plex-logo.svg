@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 96" role="img" aria-labelledby="title">
+  <title id="title">Plex</title>
+  <path fill="#fff" d="M12 18h46c22 0 36 12 36 31S80 80 58 80H32v-18h25c10 0 16-5 16-13s-6-13-16-13H32v44H12V18Zm96 0h20v44h43v18h-63V18Zm74 0h62v18h-42v5h35v17h-35v5h42v17h-62V18Z"/>
+  <path fill="#e5a00d" d="m255 18 22 31-22 31h24l22-31-22-31h-24Z"/>
+</svg>

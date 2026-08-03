@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
@@ -34,6 +35,12 @@ const presets: Record<HouseRules["preset"], HouseRules> = {
     nominationSlots: 2,
     revealMode: "AFTER_DEADLINE",
   },
+};
+
+const presetLabels: Record<HouseRules["preset"], { name: string; detail: string }> = {
+  QUICK_PICK: { name: "Quick", detail: "1 minute" },
+  MOVIE_NIGHT: { name: "Classic", detail: "2 minutes" },
+  DEEP_DIVE: { name: "Relaxed", detail: "3 minutes" },
 };
 
 function useCountdown(deadline: string | null | undefined) {
@@ -110,6 +117,8 @@ export default function RoomPage() {
   const [plexConnected, setPlexConnected] = useState(false);
   const [plexAccountLabel, setPlexAccountLabel] = useState<string>();
   const [plexWatchlist, setPlexWatchlist] = useState<CatalogItem[]>([]);
+  const [plexRecommendations, setPlexRecommendations] = useState<CatalogItem[]>([]);
+  const [plexStatusLoaded, setPlexStatusLoaded] = useState(false);
   const [plexPending, setPlexPending] = useState(false);
   const [plexMessage, setPlexMessage] = useState("");
   const [searching, setSearching] = useState(false);
@@ -183,7 +192,7 @@ export default function RoomPage() {
     const changed = previousState.current && previousState.current !== snapshot.state;
     previousState.current = snapshot.state;
     const posters = snapshot.tournament ? [snapshot.tournament.champion?.posterUrl, snapshot.tournament.activeMatchup?.candidateA.posterUrl, snapshot.tournament.activeMatchup?.candidateB.posterUrl] : [];
-    for (const url of posters) if (url) { const image = new Image(); image.src = url; }
+    for (const url of posters) if (url) { const image = new window.Image(); image.src = url; }
     if (!changed || !effectsEnabled || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     if (snapshot.state === "VOTING") navigator.vibrate?.(25);
     if (snapshot.state === "MATCHUP_RESULT") navigator.vibrate?.([35, 45, 35]);
@@ -195,9 +204,10 @@ export default function RoomPage() {
     if (plexPollTimer.current) window.clearInterval(plexPollTimer.current);
   }, []);
   useEffect(() => {
-    if (snapshot?.state !== "NOMINATING" || plexStatusChecked.current) return;
+    if (!snapshot || !["LOBBY", "NOMINATING"].includes(snapshot.state) || plexStatusChecked.current) return;
     plexStatusChecked.current = true;
     void checkPlexStatus().catch(() => {
+      setPlexStatusLoaded(true);
       setPlexMessage("Plex quick suggestions are optional.");
     });
   }, [snapshot?.state]);
@@ -211,6 +221,9 @@ export default function RoomPage() {
     snapshot?.tournament?.activeMatchup?.deadline,
   );
   const activeMatchup = snapshot?.tournament?.activeMatchup;
+  const selectedVoteTitle = activeMatchup
+    ? [activeMatchup.candidateA, activeMatchup.candidateB].find((candidate) => candidate.id === selectedVoteId)?.title
+    : undefined;
   useEffect(() => {
     setSelectedVoteId(activeMatchup?.ownVote?.candidateId ?? undefined);
   }, [activeMatchup?.id, activeMatchup?.ownVote?.candidateId]);
@@ -319,15 +332,27 @@ export default function RoomPage() {
         current?.catalogKey === catalogKey ? undefined : current,
       );
   }
-  async function loadPlexWatchlist() {
-    const response = await api<{ items: CatalogItem[] }>(
-      "/api/catalog/plex-watchlist",
+  function chooseCandidate(item: CatalogItem) {
+    if (snapshot?.viewerReady) return;
+    const missingRank = ([1, 2] as const).find(
+      (rank) => !snapshot?.ownSubmissions.some((pick) => pick.rank === rank),
     );
-    setPlexWatchlist(response.items);
+    if (missingRank) {
+      void assignPick(missingRank, item.catalogKey);
+      return;
+    }
+    setSelectedItem(item);
+  }
+  async function loadPlexWatchlist() {
+    const response = await api<{ watchlist: CatalogItem[]; recommended: CatalogItem[]; tasteSource: "PLEX" | "PLEX_AND_TAUTULLI" }>(
+      "/api/catalog/plex-suggestions",
+    );
+    setPlexWatchlist(response.watchlist);
+    setPlexRecommendations(response.recommended);
     setPlexMessage(
-      response.items.length
-        ? `${response.items.length} quick suggestions loaded`
-        : "Your Plex watchlist has no eligible titles for these house rules.",
+      response.watchlist.length || response.recommended.length
+        ? `${response.watchlist.length + response.recommended.length} personal suggestions ready${response.tasteSource === "PLEX_AND_TAUTULLI" ? " from Plex + Tautulli" : ""}`
+        : "No eligible Plex suggestions match these house rules yet.",
     );
   }
   async function checkPlexStatus(loadSuggestions = true) {
@@ -335,6 +360,7 @@ export default function RoomPage() {
       "/api/plex/status",
     );
     setPlexConnected(status.connected);
+    setPlexStatusLoaded(true);
     setPlexAccountLabel(status.accountLabel ?? undefined);
     if (status.connected && loadSuggestions) await loadPlexWatchlist();
     return status.connected;
@@ -374,6 +400,7 @@ export default function RoomPage() {
       setPlexConnected(false);
       setPlexAccountLabel(undefined);
       setPlexWatchlist([]);
+      setPlexRecommendations([]);
       setPlexMessage("Plex disconnected from this room profile.");
     } catch (reason) {
       setPlexMessage(reason instanceof Error ? reason.message : "Could not disconnect Plex.");
@@ -450,18 +477,39 @@ export default function RoomPage() {
           >
             Copy join link
           </button>
-          <span>{snapshot.locked ? "🔒 Locked" : "● Open"}</span>
+          <span>
+            {snapshot.state === "LOBBY"
+              ? snapshot.locked ? "🔒 Joining paused" : "● Open to join"
+              : ["MATCHUP_INTRO", "VOTING", "MATCHUP_RESULT"].includes(snapshot.state)
+                ? "● Open to late voters"
+                : "Picks in progress"}
+          </span>
         </div>
       </section>
+      {snapshot.state === "LOBBY" && plexStatusLoaded && !plexConnected && (
+        <section className="card plex-welcome">
+          <Image src="/brand/plex-logo.svg" alt="Plex" width={118} height={36} />
+          <div>
+            <h2>Make this bracket feel like you</h2>
+            <p className="muted">Add your watchlist and personalized picks. Every player can connect their own account.</p>
+          </div>
+          <button className="plex-button" disabled={plexPending} onClick={() => void connectPlex()}>
+            {plexPending ? "Waiting for Plex…" : "Sign in with Plex"}
+          </button>
+        </section>
+      )}
+      {snapshot.state === "LOBBY" && plexConnected && (
+        <div className="plex-connected" role="status">
+          <Image src="/brand/plex-logo.svg" alt="Plex" width={72} height={22} />
+          <span>{plexAccountLabel ?? "Account connected"} · personalized picks ready</span>
+        </div>
+      )}
       {host && !castDisplay && (
         <section className="card cast-callout" aria-labelledby="cast-heading">
           <div className="cast-callout-copy">
-            <p className="kicker">Big-screen mode</p>
-            <h2 id="cast-heading">Put the bracket on the TV</h2>
-            <p className="muted">
-              Open the device picker and launch Watch Bracket on an available
-              Chromecast or Cast-enabled television.
-            </p>
+            <p className="kicker">Big screen</p>
+            <h2 id="cast-heading">Play on the TV</h2>
+            <p className="muted">Choose a nearby TV.</p>
           </div>
           <button
             className="cast-primary"
@@ -522,10 +570,9 @@ export default function RoomPage() {
           </div>
           {host && (
             <section className="card stack">
-              <h2>Start nominations</h2>
+              <h2>Ready to pick?</h2>
               <p className="muted">
-                Everyone privately ranks two titles. The shared display only
-                shows progress until reveal.
+                Each player chooses their top two. Picks stay secret until the bracket begins.
               </p>
               <div className="preset-grid">
                 {Object.values(presets).map((preset) => (
@@ -546,73 +593,68 @@ export default function RoomPage() {
                     }
                   >
                     <span>
-                      <strong>{preset.preset.replaceAll("_", " ")}</strong>
+                      <strong>{presetLabels[preset.preset].name}</strong>
                       <br />
-                      <small>{preset.nominationDurationSeconds} seconds</small>
+                      <small>{presetLabels[preset.preset].detail}</small>
                     </span>
                   </button>
                 ))}
               </div>
-              <div className="two-col">
-                <label>
-                  Allowed media
-                  <select
-                    value={(rules.mediaTypes ?? ["MOVIE", "TV"]).join(",")}
-                    onChange={(event) =>
-                      setRules({
-                        ...rules,
-                        mediaTypes: event.target.value.split(",") as (
-                          | "MOVIE"
-                          | "TV"
-                        )[],
-                      })
-                    }
-                  >
-                    <option value="MOVIE,TV">Movies &amp; TV</option>
-                    <option value="MOVIE">Movies only</option>
-                    <option value="TV">TV only</option>
-                  </select>
-                </label>
-                <label>
-                  Maximum runtime
-                  <select
-                    value={rules.maxRuntimeMinutes ?? ""}
-                    onChange={(event) =>
-                      setRules({
-                        ...rules,
-                        maxRuntimeMinutes: event.target.value
-                          ? Number(event.target.value)
-                          : null,
-                      })
-                    }
-                  >
-                    <option value="">No limit</option>
-                    <option value="90">90 minutes</option>
-                    <option value="120">120 minutes</option>
-                    <option value="150">150 minutes</option>
-                    <option value="180">180 minutes</option>
-                  </select>
-                </label>
-                <label>
-                  Availability
-                  <select
-                    value={rules.availabilityMode ?? "ANY"}
-                    onChange={(event) =>
-                      setRules({
-                        ...rules,
-                        availabilityMode: event.target.value as
-                          | "ANY"
-                          | "WATCH_NOW"
-                          | "HYBRID",
-                      })
-                    }
-                  >
-                    <option value="ANY">Any title</option>
-                    <option value="WATCH_NOW">Watch now</option>
-                    <option value="HYBRID">Watch now or requestable</option>
-                  </select>
-                </label>
-              </div>
+              <details className="room-options">
+                <summary>Change movie-night options</summary>
+                <div className="two-col">
+                  <label>
+                    Titles
+                    <select
+                      value={(rules.mediaTypes ?? ["MOVIE", "TV"]).join(",")}
+                      onChange={(event) =>
+                        setRules({
+                          ...rules,
+                          mediaTypes: event.target.value.split(",") as ("MOVIE" | "TV")[],
+                        })
+                      }
+                    >
+                      <option value="MOVIE,TV">Movies &amp; TV</option>
+                      <option value="MOVIE">Movies only</option>
+                      <option value="TV">TV only</option>
+                    </select>
+                  </label>
+                  <label>
+                    Longest runtime
+                    <select
+                      value={rules.maxRuntimeMinutes ?? ""}
+                      onChange={(event) =>
+                        setRules({
+                          ...rules,
+                          maxRuntimeMinutes: event.target.value ? Number(event.target.value) : null,
+                        })
+                      }
+                    >
+                      <option value="">No limit</option>
+                      <option value="90">90 minutes</option>
+                      <option value="120">120 minutes</option>
+                      <option value="150">150 minutes</option>
+                      <option value="180">180 minutes</option>
+                    </select>
+                  </label>
+                  <label>
+                    Where to watch
+                    <select
+                      value={rules.availabilityMode ?? "ANY"}
+                      onChange={(event) =>
+                        setRules({
+                          ...rules,
+                          availabilityMode: event.target.value as "ANY" | "WATCH_NOW" | "HYBRID",
+                        })
+                      }
+                    >
+                      <option value="ANY">Any title</option>
+                      <option value="WATCH_NOW">Already available</option>
+                      <option value="HYBRID">Available or requestable</option>
+                    </select>
+                  </label>
+                </div>
+              </details>
               <button
                 onClick={() =>
                   void mutate(
@@ -622,7 +664,7 @@ export default function RoomPage() {
                   )
                 }
               >
-                Start nomination timer
+                Start picking
               </button>
             </section>
           )}
@@ -659,9 +701,14 @@ export default function RoomPage() {
               </div>
             </div>
             {selectedItem && !snapshot.viewerReady && (
-              <p className="pick-instruction" role="status">
-                Now tap Pick 1 or Pick 2 to place <strong>{selectedItem.title}</strong>.
-              </p>
+              <div className="pick-replace-panel" role="status">
+                <strong>Replace a pick with {selectedItem.title}</strong>
+                <div className="actions">
+                  <button onClick={() => void assignPick(1, selectedItem.catalogKey)}>Replace pick 1</button>
+                  <button onClick={() => void assignPick(2, selectedItem.catalogKey)}>Replace pick 2</button>
+                  <button className="text-button" onClick={() => setSelectedItem(undefined)}>Cancel</button>
+                </div>
+              </div>
             )}
             <div className="pick-slot-grid">
               {([1, 2] as const).map((rank) => {
@@ -703,7 +750,7 @@ export default function RoomPage() {
                         <strong>{pick.title}</strong>
                       </>
                     ) : (
-                      <span className="empty-pick">Tap after choosing a poster</span>
+                      <span className="empty-pick">Empty pick {rank}</span>
                     )}
                   </button>
                 );
@@ -731,8 +778,8 @@ export default function RoomPage() {
           <section className="card stack plex-suggestions">
             <div className="actions spread">
               <span>
-                <span className="brand">Quick picks</span>
-                <h2>Your Plex watchlist</h2>
+                <Image src="/brand/plex-logo.svg" alt="Plex" width={92} height={28} />
+                <h2>For you</h2>
               </span>
               {plexConnected && (
                 <small className="muted">{plexAccountLabel ?? "Connected"}</small>
@@ -741,16 +788,47 @@ export default function RoomPage() {
             {!plexConnected ? (
               <div className="plex-connect-row">
                 <p className="muted">
-                  Optionally connect your own Plex account to turn your watchlist
-                  into one-tap suggestions. This does not affect anyone else in
-                  the room.
+                  Bring in your watchlist and taste-based suggestions.
                 </p>
-                <button disabled={plexPending} onClick={() => void connectPlex()}>
+                <button className="plex-button" disabled={plexPending} onClick={() => void connectPlex()}>
+                  <Image src="/brand/plex-logo.svg" alt="Plex" width={92} height={28} />
                   {plexPending ? "Waiting for Plex…" : "Connect my Plex"}
                 </button>
               </div>
             ) : (
               <>
+                {plexRecommendations.length > 0 && (
+                  <>
+                    <h3 className="suggestion-heading">Inspired by your taste</h3>
+                    <div className="poster-grid">
+                      {plexRecommendations.map((item) => (
+                        <button
+                          type="button"
+                          className={`poster-choice ${selectedItem?.catalogKey === item.catalogKey ? "selected" : ""}`}
+                          key={item.catalogKey}
+                          aria-pressed={selectedItem?.catalogKey === item.catalogKey}
+                          aria-label={`Pick ${item.title}`}
+                          disabled={snapshot.viewerReady}
+                          draggable={!snapshot.viewerReady}
+                          onClick={() => chooseCandidate(item)}
+                          onDragStart={(event) => {
+                            setSelectedItem(item);
+                            event.dataTransfer.effectAllowed = "copy";
+                            event.dataTransfer.setData("application/watch-bracket-catalog-key", item.catalogKey);
+                          }}
+                        >
+                          {item.posterUrl ? (
+                            <img src={item.posterUrl} alt="" loading="lazy" />
+                          ) : (
+                            <span className="poster-placeholder" aria-hidden="true">WB</span>
+                          )}
+                          <strong>{item.title}</strong>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {plexWatchlist.length > 0 && <h3 className="suggestion-heading">From your watchlist</h3>}
                 <div className="poster-grid">
                   {plexWatchlist.map((item) => (
                     <button
@@ -761,7 +839,7 @@ export default function RoomPage() {
                       aria-label={`Choose ${item.title} from your Plex watchlist`}
                       disabled={snapshot.viewerReady}
                       draggable={!snapshot.viewerReady}
-                      onClick={() => setSelectedItem(item)}
+                      onClick={() => chooseCandidate(item)}
                       onDragStart={(event) => {
                         setSelectedItem(item);
                         event.dataTransfer.effectAllowed = "copy";
@@ -794,20 +872,21 @@ export default function RoomPage() {
           </section>
           <section className="card stack">
             <div>
-              <h2>Search movies &amp; TV</h2>
-              <p className="muted">
+              <p className="kicker">Choose your top 2</p>
+              <h2>Search all movies &amp; TV</h2>
+              <p hidden className="muted">
                 Suggestions appear as you type. Tap a poster, then choose a
                 pinned slot—or drag it onto a slot.
               </p>
             </div>
             <label>
-              Find a title
+              Search for a title
               <input
                 type="search"
-                autoComplete="off"
+                autoComplete="on"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Try Dune or The Bear"
+                placeholder="Movie or show title"
               />
             </label>
             <div className="search-state" aria-live="polite">
@@ -833,7 +912,7 @@ export default function RoomPage() {
                   aria-label={`Choose ${item.title}`}
                   disabled={snapshot.viewerReady}
                   draggable={!snapshot.viewerReady}
-                  onClick={() => setSelectedItem(item)}
+                  onClick={() => chooseCandidate(item)}
                   onDragStart={(event) => {
                     setSelectedItem(item);
                     event.dataTransfer.effectAllowed = "copy";
@@ -1080,12 +1159,12 @@ export default function RoomPage() {
                 </div>
                 {snapshot.state === "MATCHUP_INTRO" && (
                   <p className="notice">
-                    Matchup incoming. Voting opens when the intro completes.
+                    Voting opens in {voteCountdown}.
                   </p>
                 )}
                 {snapshot.state === "VOTING" && (
                   <div className="stack vote-lock-panel">
-                    <p className="muted">
+                    <p hidden className="muted">
                       Tap a poster, then lock it in. Your vote stays private.
                     </p>
                     <button
@@ -1102,8 +1181,10 @@ export default function RoomPage() {
                       }
                     >
                       {snapshot.tournament.activeMatchup.ownVote?.candidateId === selectedVoteId
-                        ? "Pick locked in"
-                        : "Lock in pick"}
+                        ? `${selectedVoteTitle ?? "Pick"} locked in`
+                        : selectedVoteTitle
+                          ? `Vote for ${selectedVoteTitle}`
+                          : "Choose a poster"}
                     </button>
                     <button
                       aria-pressed={snapshot.tournament.activeMatchup.ownVote?.abstained === true}

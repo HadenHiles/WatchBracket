@@ -40,6 +40,11 @@ const presets: Record<HouseRules["preset"], HouseRules> = {
     revealMode: "AFTER_DEADLINE",
   },
 };
+const presetLabels: Record<HouseRules["preset"], { name: string }> = {
+  QUICK_PICK: { name: "Quick" },
+  MOVIE_NIGHT: { name: "Classic" },
+  DEEP_DIVE: { name: "Relaxed" },
+};
 
 export default function SetupPage() {
   const router = useRouter();
@@ -183,7 +188,7 @@ export default function SetupPage() {
       {step === 2 && (
         <section className="card stack">
           <h1>Default house rules</h1>
-          <p className="muted">Hosts can adjust these for each room.</p>
+          <p className="muted">Choose how much time players usually get for their top two picks.</p>
           {Object.values(presets).map((rules) => (
             <button
               className={`preset ${setup.defaultRules.preset === rules.preset ? "selected" : "secondary"}`}
@@ -201,7 +206,7 @@ export default function SetupPage() {
               }
             >
               <span>
-                <strong>{rules.preset.replaceAll("_", " ")}</strong>
+                <strong>{presetLabels[rules.preset].name}</strong>
                 <br />
                 <small>
                   {rules.nominationDurationSeconds} seconds · two private ranked
@@ -302,10 +307,8 @@ export default function SetupPage() {
           <h1>Media integrations</h1>
           <p>{configuredCount} of 4 integration configurations detected.</p>
           <p className="muted">
-            Add these values to the root-owned{" "}
-            <code>.env.integration.production</code> file on your NAS, then
-            restart the integration-service container. Values are read only by
-            that private service.
+            Integration secrets stay in <code>.env.integration.production</code> on your NAS.
+            After changing it, restart Watch Bracket to refresh this check.
           </p>
           {["TMDB", "PLEX", "TAUTULLI", "SEERR"].map((name) => {
             const status = providers[name];
@@ -353,7 +356,7 @@ export default function SetupPage() {
               {setup.region} · {setup.timeZone}
             </dd>
             <dt>Preset</dt>
-            <dd>{setup.defaultRules.preset.replaceAll("_", " ")}</dd>
+            <dd>{presetLabels[setup.defaultRules.preset].name}</dd>
             <dt>Integrations detected</dt>
             <dd>{configuredCount} of 4</dd>
           </dl>

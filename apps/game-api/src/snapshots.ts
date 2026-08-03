@@ -347,6 +347,8 @@ export function toDisplayScene(
   return {
     type: "MATCHUP_RESULT",
     roomName: snapshot.name,
+    roomCode: snapshot.code,
+    joinUrl: `${publicAppUrl}/join/${snapshot.code}`,
     stage: matchup.stage,
     matchupNumber: matchup.sequence,
     totalMatchups: tournament.totalMatchups,

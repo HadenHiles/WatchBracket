@@ -4,7 +4,7 @@ import {
   hash as hashPassword,
   verify as verifyPassword,
 } from "@node-rs/argon2";
-import { and, eq, gt, isNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, ne, sql } from "drizzle-orm";
 import type { Database } from "@watch-bracket/db";
 import {
   adminSessions,
@@ -15,6 +15,7 @@ import {
   displaySessions,
   households,
   idempotencyKeys,
+  matchups,
   participants,
   rooms,
 } from "@watch-bracket/db";
@@ -29,6 +30,15 @@ import {
 import type { GameApiEnv } from "./env.js";
 
 export type DomainContext = { db: Database; env: GameApiEnv };
+const lateVoterRoomStates = new Set([
+  "NOMINATIONS_LOCKED",
+  "MATCHUP_INTRO",
+  "VOTING",
+  "MATCHUP_RESULT",
+  "WINNER",
+]);
+export const acceptsLateVoters = (state: string) =>
+  lateVoterRoomStates.has(state);
 export class DomainError extends Error {
   constructor(
     public code: string,
@@ -373,13 +383,14 @@ export async function joinRoom(
       return { room, participant: claimed!, token: replayToken, restored: true };
     }
   }
-  if (room.state !== "LOBBY")
+  const acceptsLateJoin = acceptsLateVoters(room.state);
+  if (room.state !== "LOBBY" && !acceptsLateJoin)
     throw new DomainError(
       "ROOM_IN_PROGRESS",
-      "This room is already in progress.",
+      "Nominations are already in progress. Join again when voting starts.",
       409,
     );
-  if (room.lockedAt)
+  if (room.state === "LOBBY" && room.lockedAt)
     throw new DomainError("ROOM_LOCKED", "This room is locked.", 423);
   const count = await db
     .select({ count: sql<number>`count(*)::int` })
@@ -401,6 +412,38 @@ export async function joinRoom(
           tokenHash: hashToken(token, env.PARTICIPANT_SESSION_PEPPER),
         })
         .returning();
+      const participant = inserted[0]!;
+      if (acceptsLateJoin) {
+        const [activeMatchup] = await tx
+          .select()
+          .from(matchups)
+          .where(
+            and(
+              eq(matchups.roomId, room.id),
+              isNull(matchups.advancedAt),
+            ),
+          )
+          .orderBy(desc(matchups.sequence))
+          .limit(1);
+        const canJoinCurrentVote =
+          activeMatchup?.status === "INTRO" ||
+          (activeMatchup?.status === "VOTING" &&
+            activeMatchup.votingEndsAt !== null &&
+            activeMatchup.votingEndsAt.getTime() > Date.now());
+        if (activeMatchup && canJoinCurrentVote) {
+          const eligible = Array.isArray(activeMatchup.eligibleParticipantIds)
+            ? activeMatchup.eligibleParticipantIds.filter(
+                (id): id is string => typeof id === "string",
+              )
+            : [];
+          await tx
+            .update(matchups)
+            .set({
+              eligibleParticipantIds: [...new Set([...eligible, participant.id])],
+            })
+            .where(eq(matchups.id, activeMatchup.id));
+        }
+      }
       await tx
         .update(rooms)
         .set({ version: sql`${rooms.version} + 1`, updatedAt: new Date() })

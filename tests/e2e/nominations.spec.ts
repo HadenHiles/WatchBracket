@@ -1,5 +1,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
+const captureDocs = process.env.CAPTURE_DOCS === '1';
+
 async function join(context: BrowserContext, code: string, nickname: string) {
   const page = await context.newPage();
   await page.goto(`/join/${code}`);
@@ -25,6 +27,7 @@ async function makePicks(page: Page) {
 }
 
 test('nominations keep picks pinned and contenders private by default', async ({ browser }) => {
+  test.setTimeout(120_000);
   const hostContext = await browser.newContext();
   const guestContext = await browser.newContext();
   const host = await hostContext.newPage();
@@ -40,6 +43,7 @@ test('nominations keep picks pinned and contenders private by default', async ({
   await expect(guest.getByRole('button', { name: 'Connect my Plex' })).toBeVisible();
 
   await Promise.all([makePicks(host), makePicks(guest)]);
+  if (captureDocs) await host.screenshot({ path: 'docs/assets/demo-nominations.png', fullPage: true });
   await host.getByRole('button', { name: 'Reveal now' }).click();
 
   await expect(host.getByRole('heading', { name: 'Keep the lineup a surprise' })).toBeVisible();
@@ -54,13 +58,27 @@ test('nominations keep picks pinned and contenders private by default', async ({
   await host.getByRole('button', { name: 'Skip presentation' }).click();
   await expect(host.getByText('Tap a poster, then lock it in.')).toBeVisible();
   await expect(guest.getByText('Tap a poster, then lock it in.')).toBeVisible();
+  if (captureDocs) await host.screenshot({ path: 'docs/assets/demo-voting.png', fullPage: true });
 
-  await host.locator('button.matchup-poster-option').first().click();
-  await guest.locator('button.matchup-poster-option').first().click();
-  await host.getByRole('button', { name: 'Lock in pick' }).click();
-  await expect(host.getByRole('button', { name: 'Pick locked in' })).toBeVisible();
-  await guest.getByRole('button', { name: 'Lock in pick' }).click();
-  await expect(host.getByText('advances')).toBeVisible({ timeout: 5_000 });
+  for (let matchup = 1; matchup <= 9; matchup += 1) {
+    await host.locator('button.matchup-poster-option').first().click();
+    await guest.locator('button.matchup-poster-option').first().click();
+    await host.getByRole('button', { name: 'Lock in pick' }).click();
+    await expect(host.getByRole('button', { name: 'Pick locked in' })).toBeVisible();
+    await guest.getByRole('button', { name: 'Lock in pick' }).click();
+    await expect(host.getByText('advances')).toBeVisible({ timeout: 5_000 });
+    await host.getByRole('button', { name: 'Skip presentation' }).click();
+    if (matchup === 9) break;
+    await expect(host.getByText('Matchup incoming. Voting opens when the intro completes.')).toBeVisible();
+    await host.getByRole('button', { name: 'Skip presentation' }).click();
+    await expect(host.getByText('Tap a poster, then lock it in.')).toBeVisible();
+  }
+
+  await expect(host.getByLabel('Tournament podium')).toBeVisible();
+  await expect(host.locator('.podium-place')).toHaveCount(3);
+  await expect(host.locator('.controller-confetti i')).toHaveCount(32);
+  await expect(host.getByRole('link', { name: /Watch now on Plex|Open in Jellyseerr to request/ })).toBeVisible();
+  if (captureDocs) await host.screenshot({ path: 'docs/assets/demo-winner.png', fullPage: true });
 
   await Promise.all([hostContext.close(), guestContext.close()]);
 });

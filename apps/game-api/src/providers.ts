@@ -1,4 +1,4 @@
-import { PlexAuthStartResultSchema, PlexAuthStatusResultSchema, PlexInventoryResultSchema, PlexUnlinkResultSchema, PlexWatchlistResultSchema, SeerrRequestResultSchema, SeerrStatusResultSchema, TautulliHistoryResultSchema, TmdbRecommendationsResultSchema, TmdbSearchResultSchema, type CanonicalMediaItem, type ProviderOperation, type RecommendationCandidate } from '@watch-bracket/provider-contracts';
+import { PlexAuthStartResultSchema, PlexAuthStatusResultSchema, PlexInventoryResultSchema, PlexUnlinkResultSchema, PlexWatchlistResultSchema, SeerrRequestResultSchema, SeerrStatusResultSchema, TautulliHistoryResultSchema, TmdbDetailsResultSchema, TmdbRecommendationsResultSchema, TmdbSearchResultSchema, type CanonicalMediaItem, type ProviderOperation, type RecommendationCandidate } from '@watch-bracket/provider-contracts';
 import type { DomainContext } from './domain.js';
 import { DomainError } from './domain.js';
 
@@ -34,6 +34,14 @@ export async function recommendFromTmdb(ctx: DomainContext, input: { seeds: Arra
   const parsed = TmdbRecommendationsResultSchema.safeParse(payload);
   if (!parsed.success) throw new DomainError('RECOMMENDATIONS_INVALID_RESPONSE', 'The recommendation provider returned an invalid response.', 502);
   return { candidates: parsed.data.candidates, cachedUntil: parsed.data.cachedUntil };
+}
+
+export async function detailsFromTmdb(ctx: DomainContext, input: { tmdbId: number; mediaType: 'MOVIE' | 'TV'; region?: string }) {
+  const region = input.region ?? 'CA';
+  const payload = await operation(ctx, { provider: 'TMDB', operation: 'DETAILS', input: { tmdbId: input.tmdbId, mediaType: input.mediaType, region, language: `en-${region}` } });
+  const parsed = TmdbDetailsResultSchema.safeParse(payload);
+  if (!parsed.success) throw new DomainError('CATALOG_INVALID_RESPONSE', 'The media catalog returned invalid title details.', 502);
+  return parsed.data;
 }
 
 export async function enrichWithHouseholdProviders(ctx: DomainContext, items: CanonicalMediaItem[]): Promise<CanonicalMediaItem[]> {

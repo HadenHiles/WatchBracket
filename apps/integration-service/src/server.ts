@@ -41,6 +41,7 @@ app.post('/internal/providers/operation', async (request, reply) => {
     const cachedUntil = new Date(Date.now() + tmdbMetadataTtlMs).toISOString();
     if (parsed.data.operation === 'SEARCH') return { ok: true, provider: 'TMDB', operation: 'SEARCH', items: await tmdb.search({ ...parsed.data.input, mediaType: parsed.data.input.mediaType }), cachedUntil };
     if (parsed.data.operation === 'RECOMMENDATIONS') return { ok: true, provider: 'TMDB', operation: 'RECOMMENDATIONS', candidates: await tmdb.recommendations(parsed.data.input), cachedUntil };
+    if (parsed.data.operation === 'DETAILS') return { ok: true, provider: 'TMDB', operation: 'DETAILS', item: await tmdb.details(parsed.data.input.mediaType, parsed.data.input.tmdbId, parsed.data.input.region, parsed.data.input.language), cachedUntil };
     if (parsed.data.operation === 'HEALTH') {
       const provider = parsed.data.provider === 'PLEX' ? plex : parsed.data.provider === 'TAUTULLI' ? tautulli : seerr;
       await provider.health(); return { ok: true, provider: parsed.data.provider, operation: 'HEALTH', healthy: true, circuit: provider.circuit };

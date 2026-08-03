@@ -6,7 +6,7 @@ import type { CanonicalMediaItem } from '@watch-bracket/provider-contracts';
 import { HouseRulesSchema, type HouseRules } from '@watch-bracket/realtime-protocol';
 import type { DomainContext } from './domain.js';
 import { DomainError, requireRoomHost } from './domain.js';
-import { enrichWithHouseholdProviders, getPlexWatchlist, searchTmdb } from './providers.js';
+import { detailsFromTmdb, enrichWithHouseholdProviders, getPlexWatchlist, searchTmdb } from './providers.js';
 import { eligibilityFailures } from './eligibility.js';
 
 export const HOUSE_RULE_PRESETS: Record<HouseRules['preset'], HouseRules> = {
@@ -83,7 +83,20 @@ export async function startNominations(ctx: DomainContext, participantId: string
 }
 
 export async function submitNomination(ctx: DomainContext, participantId: string, roomId: string, rank: 1 | 2, catalogKey: string) {
-  const [item] = await ctx.db.select().from(mediaItems).where(eq(mediaItems.catalogKey, catalogKey)).limit(1);
+  let [item] = await ctx.db.select().from(mediaItems).where(eq(mediaItems.catalogKey, catalogKey)).limit(1);
+  if (!item) throw new DomainError('MEDIA_NOT_FOUND', 'That catalog title is unavailable.', 404);
+  if (item.tmdbId) {
+    try {
+      const [room] = await ctx.db.select({ householdId: rooms.householdId }).from(rooms).where(eq(rooms.id, roomId)).limit(1);
+      const [household] = room ? await ctx.db.select({ region: households.region }).from(households).where(eq(households.id, room.householdId)).limit(1) : [];
+      const details = await detailsFromTmdb(ctx, { tmdbId: item.tmdbId, mediaType: item.mediaType, region: household?.region ?? 'CA' });
+      const enriched = await enrichWithHouseholdProviders(ctx, [details.item]);
+      await cacheTmdbItems(ctx, enriched, details.cachedUntil, roomId);
+      [item] = await ctx.db.select().from(mediaItems).where(eq(mediaItems.catalogKey, catalogKey)).limit(1);
+    } catch {
+      // A transient provider failure must not discard an otherwise valid pick.
+    }
+  }
   if (!item) throw new DomainError('MEDIA_NOT_FOUND', 'That catalog title is unavailable.', 404);
   return ctx.db.transaction(async (tx) => {
     const [room] = await tx.select().from(rooms).where(eq(rooms.id, roomId)).for('update').limit(1);

@@ -81,6 +81,15 @@ export const TmdbRecommendationsOperationSchema = z.object({
   })
 });
 
+export const TmdbDetailsOperationSchema = z.object({
+  provider: z.literal('TMDB'),
+  operation: z.literal('DETAILS'),
+  input: TmdbCommonInputSchema.extend({
+    tmdbId: z.number().int().positive(),
+    mediaType: MediaTypeSchema
+  })
+});
+
 export const ProviderHealthOperationSchema = z.object({
   provider: z.enum(['PLEX', 'TAUTULLI', 'SEERR']),
   operation: z.literal('HEALTH'),
@@ -141,9 +150,10 @@ export const SeerrRequestOperationSchema = z.object({
   })
 });
 
-export const ProviderOperationSchema = z.discriminatedUnion('operation', [TmdbSearchOperationSchema, TmdbRecommendationsOperationSchema, ProviderHealthOperationSchema, PlexInventoryOperationSchema, PlexAuthStartOperationSchema, PlexAuthStatusOperationSchema, PlexWatchlistOperationSchema, PlexUnlinkOperationSchema, TautulliHistoryOperationSchema, SeerrStatusOperationSchema, SeerrRequestOperationSchema]);
+export const ProviderOperationSchema = z.discriminatedUnion('operation', [TmdbSearchOperationSchema, TmdbRecommendationsOperationSchema, TmdbDetailsOperationSchema, ProviderHealthOperationSchema, PlexInventoryOperationSchema, PlexAuthStartOperationSchema, PlexAuthStatusOperationSchema, PlexWatchlistOperationSchema, PlexUnlinkOperationSchema, TautulliHistoryOperationSchema, SeerrStatusOperationSchema, SeerrRequestOperationSchema]);
 export const TmdbSearchResultSchema = z.object({ ok: z.literal(true), provider: z.literal('TMDB'), operation: z.literal('SEARCH'), items: z.array(CanonicalMediaItemSchema), cachedUntil: z.iso.datetime() });
 export const TmdbRecommendationsResultSchema = z.object({ ok: z.literal(true), provider: z.literal('TMDB'), operation: z.literal('RECOMMENDATIONS'), candidates: z.array(RecommendationCandidateSchema), cachedUntil: z.iso.datetime() });
+export const TmdbDetailsResultSchema = z.object({ ok: z.literal(true), provider: z.literal('TMDB'), operation: z.literal('DETAILS'), item: CanonicalMediaItemSchema, cachedUntil: z.iso.datetime() });
 export const ProviderHealthResultSchema = z.object({ ok: z.literal(true), operation: z.literal('HEALTH'), provider: z.enum(['PLEX', 'TAUTULLI', 'SEERR']), healthy: z.boolean(), circuit: z.enum(['CLOSED', 'OPEN']) });
 export const PlexInventoryItemSchema = z.object({ tmdbId: z.number().int().positive().nullable(), mediaType: MediaTypeSchema, ratingKey: z.string(), title: z.string(), year: z.number().int().nullable(), libraryId: z.string(), libraryTitle: z.string(), plexUrl: z.url().nullable(), episodeCount: z.number().int().nonnegative().nullable() });
 export const PlexInventoryResultSchema = z.object({ ok: z.literal(true), provider: z.literal('PLEX'), operation: z.literal('PLEX_INVENTORY'), libraries: z.array(z.object({ id: z.string(), title: z.string(), mediaType: MediaTypeSchema })), items: z.array(PlexInventoryItemSchema), refreshedAt: z.iso.datetime() });
@@ -155,7 +165,7 @@ export const TautulliHistoryResultSchema = z.object({ ok: z.literal(true), provi
 export const SeerrStatusSchema = z.enum(['UNKNOWN', 'PENDING', 'PROCESSING', 'PARTIAL', 'AVAILABLE', 'REQUESTABLE', 'UNAVAILABLE']);
 export const SeerrStatusResultSchema = z.object({ ok: z.literal(true), provider: z.literal('SEERR'), operation: z.literal('SEERR_STATUS'), items: z.array(z.object({ tmdbId: z.number().int().positive(), mediaType: MediaTypeSchema, status: SeerrStatusSchema, requestable: z.boolean(), requestUrl: z.url().nullable() })) });
 export const SeerrRequestResultSchema = z.object({ ok: z.literal(true), provider: z.literal('SEERR'), operation: z.literal('SEERR_REQUEST'), requestId: z.number().int().positive(), status: SeerrStatusSchema });
-export const ProviderSuccessSchema = z.union([TmdbSearchResultSchema, TmdbRecommendationsResultSchema, ProviderHealthResultSchema, PlexInventoryResultSchema, PlexAuthStartResultSchema, PlexAuthStatusResultSchema, PlexWatchlistResultSchema, PlexUnlinkResultSchema, TautulliHistoryResultSchema, SeerrStatusResultSchema, SeerrRequestResultSchema]);
+export const ProviderSuccessSchema = z.union([TmdbSearchResultSchema, TmdbRecommendationsResultSchema, TmdbDetailsResultSchema, ProviderHealthResultSchema, PlexInventoryResultSchema, PlexAuthStartResultSchema, PlexAuthStatusResultSchema, PlexWatchlistResultSchema, PlexUnlinkResultSchema, TautulliHistoryResultSchema, SeerrStatusResultSchema, SeerrRequestResultSchema]);
 export const ProviderErrorSchema = z.object({ ok: z.literal(false), error: z.object({ code: z.enum(['NOT_CONFIGURED', 'NOT_IMPLEMENTED', 'UPSTREAM_ERROR', 'UPSTREAM_TIMEOUT', 'INVALID_RESPONSE', 'CIRCUIT_OPEN', 'ALREADY_REQUESTED']), message: z.string() }) });
 
 export type CanonicalMediaItem = z.infer<typeof CanonicalMediaItemSchema>;

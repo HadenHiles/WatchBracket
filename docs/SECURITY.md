@@ -29,6 +29,8 @@ The first-run wizard persists only non-secret household defaults. Its integratio
 
 Tournament votes are room- and matchup-scoped. A unique database constraint permits one current vote per participant, updates replace the prior choice, explicit abstention cannot contain a candidate, and the server rejects votes after its stored deadline. Controller snapshots expose only the viewer's vote; displays receive completion counts before resolution and aggregate totals afterward.
 
+The optional podium objection is room-scoped and may be opened only once after tournament completion. Eligibility is captured from connected room participants when it opens; each eligible participant has one replaceable Gold + Silver ballot, rankings must be distinct podium finalists, and aggregate rankings are revealed only after every eligible ballot is received.
+
 The example Caddy configuration applies HSTS, nosniff, referrer, and permissions headers. The receiver gets a narrow CSP. Do not weaken it to admit arbitrary scripts, images, or connection destinations.
 
 ## V1 release checklist

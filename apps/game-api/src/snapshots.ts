@@ -291,6 +291,22 @@ export function toDisplayScene(
       joinUrl: `${publicAppUrl}/join/${snapshot.code}`,
       displayMode: winnerDisplayMode,
       winner: sceneCandidate(champion),
+      objection: tournament.objection
+        ? {
+            status: tournament.objection.status,
+            objectorNickname: tournament.objection.objectorNickname,
+            eligibleVoters: tournament.objection.eligibleVoters,
+            ballotsReceived: tournament.objection.ballotsReceived,
+            championChanged: tournament.objection.championChanged,
+            candidates: tournament.objection.candidates.map((candidate) => ({
+              ...sceneCandidate(candidate),
+              goldVotes: candidate.goldVotes,
+              silverVotes: candidate.silverVotes,
+              points: candidate.points,
+              finalPlacement: candidate.finalPlacement,
+            })),
+          }
+        : null,
       podium: tournament.podium.map((item) => ({
         ...sceneCandidate(item),
         placement: item.placement,

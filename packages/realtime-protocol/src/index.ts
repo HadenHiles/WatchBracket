@@ -119,6 +119,25 @@ export const TournamentSnapshotSchema = z.object({
   stage: TournamentStageSchema,
   status: z.enum(["ACTIVE", "COMPLETED"]),
   champion: TournamentCandidateSchema.nullable(),
+  objection: z.object({
+    status: z.enum(["OPEN", "COMPLETED"]),
+    objectorNickname: z.string(),
+    eligibleVoters: z.number().int().positive(),
+    ballotsReceived: z.number().int().nonnegative(),
+    viewerEligible: z.boolean(),
+    ownBallot: z.object({
+      goldCandidateId: z.uuid(),
+      silverCandidateId: z.uuid(),
+    }).nullable(),
+    candidates: z.array(TournamentCandidateSchema.extend({
+      originalPlacement: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      goldVotes: z.number().int().nonnegative().nullable(),
+      silverVotes: z.number().int().nonnegative().nullable(),
+      points: z.number().int().nonnegative().nullable(),
+      finalPlacement: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable(),
+    })).length(3),
+    championChanged: z.boolean().nullable(),
+  }).nullable(),
   podium: z.array(TournamentCandidateSchema.extend({
     placement: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   })).max(4),
@@ -242,6 +261,7 @@ export const controllerEvents = [
   "matchup:result",
   "bracket:updated",
   "room:winner",
+  "room:objection",
   "display:paired",
   "display:revoked",
   "room:error",

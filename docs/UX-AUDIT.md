@@ -24,7 +24,8 @@ Audited across mobile controller, host lobby, joining, nominations, voting, winn
 | Voting | Generic `Lock in pick` required the player to map the selected poster back to the action | The button now says `Vote for [title]`; tapping posters remains the selection action |
 | Active room | Room status appeared locked even though late voting is supported | State now says when late voters can join and when picks are in progress |
 | TV pairing | Pairing copy described how the host generated the code | The screen now asks only for the code shown on the host phone |
-| Winner | Links could point at private service addresses | Plex and Jellyseerr title links are built from their configured public URLs; Plex is preferred when the winner is locally available |
+| Winner | Links could point at private service addresses | Plex uses canonical `app.plex.tv` title links and Jellyseerr uses its configured public URL; Plex is preferred when the winner is locally available |
+| Winner | A close bracket result had no playful group override | Any one present player may spend the room's single “I object!” and trigger a live Gold + Silver vote across the three finalists |
 | Setup | Technical preset names leaked into onboarding | Setup uses the same plain-language preset names and a shorter integration status explanation |
 
 ## Intentionally advanced surfaces

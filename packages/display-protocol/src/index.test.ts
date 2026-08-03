@@ -113,6 +113,7 @@ describe("Cast launch protocol", () => {
         joinUrl: "https://example.test/join/ABC123",
         displayMode: "AUTO",
         winner: candidateB,
+        objection: null,
         podium: [
           { ...candidateB, placement: 1 },
           { ...candidateA, placement: 2 },

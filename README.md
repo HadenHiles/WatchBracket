@@ -1,6 +1,6 @@
 # Watch Bracket
 
-Watch Bracket is a self-hosted, real-time party game for turning “what should we watch?” into a shared decision. V1 implements Milestones 0 through 9: NAS deployment and onboarding, durable realtime rooms, browser and Chromecast displays, private nominations, the complete Double-Take tournament, TMDB/Plex/Tautulli/Seerr-compatible integrations, winner actions, household memory, replay, animated presentation, accessibility, and production hardening.
+Watch Bracket is a self-hosted, real-time party game for turning “what should we watch?” into a shared decision. V1 implements Milestones 0 through 9: NAS deployment and onboarding, durable realtime rooms, browser and Chromecast displays, private nominations, the complete Double-Take tournament, TMDB/Plex/Tautulli/Seerr-compatible integrations, winner actions, a one-shot “I object!” podium re-vote, household memory, replay, animated presentation, accessibility, and production hardening.
 
 ## See it in action
 
@@ -39,6 +39,8 @@ SEERR_PUBLIC_URL=https://jellyseerr.example.com
 ```
 
 Plex winner actions use canonical `app.plex.tv` deep links so supported devices can hand them to the Plex app. `SEERR_PUBLIC_URL` is the safe, credential-free Jellyseerr destination shown to players. Tokens and API keys remain private in `.env.integration.production`.
+
+Participant Plex sign-in survives page reloads for the room session. The Plex token is encrypted in PostgreSQL; browsers retain only the normal room cookie and a non-sensitive connected-account label for seamless UI restoration.
 
 Start everything—including PostgreSQL migrations—with:
 

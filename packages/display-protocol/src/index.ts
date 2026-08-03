@@ -139,6 +139,19 @@ export const WinnerSceneSchema = z.object({
   ...RoomIdentityFields,
   displayMode: z.enum(["AUTO", "PODIUM", "BRACKET"]),
   winner: TournamentCandidateSceneSchema,
+  objection: z.object({
+    status: z.enum(["OPEN", "COMPLETED"]),
+    objectorNickname: z.string(),
+    eligibleVoters: z.number().int().positive(),
+    ballotsReceived: z.number().int().nonnegative(),
+    championChanged: z.boolean().nullable(),
+    candidates: z.array(TournamentCandidateSceneSchema.extend({
+      goldVotes: z.number().int().nonnegative().nullable(),
+      silverVotes: z.number().int().nonnegative().nullable(),
+      points: z.number().int().nonnegative().nullable(),
+      finalPlacement: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable(),
+    })).length(3),
+  }).nullable(),
   podium: z.array(TournamentCandidateSceneSchema.extend({
     placement: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   })).max(4),

@@ -8,6 +8,8 @@ The game API persists canonical `media type + TMDB ID` identities, metadata expi
 
 Plex inventory is refreshed at service startup, every 30 minutes, and on demand through the typed inventory operation. Plex GUIDs map local media to canonical TMDB identities, including show episode counts, and generated Plex Web links never contain a token. Watch Now accepts either configured streaming offers or confirmed local Plex availability.
 
+Participant Plex authorization is encrypted at rest and keyed to the durable room participant session. Reloading a room asks the server for authoritative connection status; browser session storage contains only the non-sensitive account label used to avoid a disconnected-state flash, never the Plex token.
+
 Tautulli history is reduced inside the integration service to household-level title play counts and last-watched timestamps. User names, user IDs, sessions, IP addresses, and raw history rows never cross the service boundary. Seerr-compatible status checks label titles as available, pending, processing, partial, or requestable. A media request can only be made for the completed room's canonical winner after an explicit host confirmation; TV requests additionally require the host to choose a server-controlled season policy.
 
 All private providers use exact configured base URLs, five-second timeouts, bounded retries, and a one-minute circuit breaker after repeated failures. Guest input cannot select a provider URL, Plex library, Seerr server, quality profile, or root folder.

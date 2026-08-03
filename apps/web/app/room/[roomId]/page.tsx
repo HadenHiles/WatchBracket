@@ -150,10 +150,13 @@ export default function RoomPage() {
   const [winnerActionPending, setWinnerActionPending] = useState(false);
   const [effectsEnabled, setEffectsEnabled] = useState(false);
   const [displayWinnerView, setDisplayWinnerView] = useState<"AUTO" | "PODIUM" | "BRACKET">("AUTO");
+  const [objectionGoldId, setObjectionGoldId] = useState<string>();
+  const [objectionSilverId, setObjectionSilverId] = useState<string>();
+  const [objectionRank, setObjectionRank] = useState<"GOLD" | "SILVER">("GOLD");
+  const [objectionPending, setObjectionPending] = useState(false);
   const previousState = useRef<RoomSnapshot["state"] | undefined>(undefined);
   const searchRequest = useRef(0);
   const plexPollTimer = useRef<number | undefined>(undefined);
-  const plexStatusChecked = useRef(false);
   const sequence = useRef(0);
   const load = useCallback(async () => {
     try {
@@ -224,13 +227,20 @@ export default function RoomPage() {
     if (plexPollTimer.current) window.clearInterval(plexPollTimer.current);
   }, []);
   useEffect(() => {
-    if (!snapshot || !["LOBBY", "NOMINATING"].includes(snapshot.state) || plexStatusChecked.current) return;
-    plexStatusChecked.current = true;
-    void checkPlexStatus().catch(() => {
+    const participantId = snapshot?.viewerParticipantId;
+    if (!participantId) return;
+    const key = `watch-bracket:plex:${participantId}`;
+    const cached = window.sessionStorage.getItem(key);
+    if (cached) {
+      setPlexConnected(true);
+      setPlexStatusLoaded(true);
+      setPlexAccountLabel(cached);
+    }
+    void checkPlexStatus(["LOBBY", "NOMINATING"].includes(snapshot.state)).catch(() => {
       setPlexStatusLoaded(true);
       setPlexMessage("Plex quick suggestions are optional.");
     });
-  }, [snapshot?.state]);
+  }, [snapshot?.viewerParticipantId, snapshot?.state]);
   const joinUrl = useMemo(
     () => (snapshot ? `${window.location.origin}/join/${snapshot.code}` : ""),
     [snapshot],
@@ -257,6 +267,22 @@ export default function RoomPage() {
     const timer = window.setTimeout(() => setDisplayWinnerView("BRACKET"), 10_000);
     return () => window.clearTimeout(timer);
   }, [snapshot?.state, snapshot?.tournament?.champion?.id]);
+  useEffect(() => {
+    const objection = snapshot?.tournament?.objection;
+    if (!objection) {
+      setObjectionGoldId(undefined);
+      setObjectionSilverId(undefined);
+      setObjectionRank("GOLD");
+      return;
+    }
+    if (objection.ownBallot) {
+      setObjectionGoldId(objection.ownBallot.goldCandidateId);
+      setObjectionSilverId(objection.ownBallot.silverCandidateId);
+      return;
+    }
+    setObjectionGoldId((current) => objection.candidates.some((candidate) => candidate.id === current) ? current : undefined);
+    setObjectionSilverId((current) => objection.candidates.some((candidate) => candidate.id === current) ? current : undefined);
+  }, [snapshot?.tournament?.objection?.status, snapshot?.tournament?.objection?.ownBallot?.goldCandidateId, snapshot?.tournament?.objection?.ownBallot?.silverCandidateId]);
   useEffect(() => {
     if (snapshot?.state !== "NOMINATING") return;
     const term = query.trim();
@@ -321,6 +347,45 @@ export default function RoomPage() {
       { mode: next },
     );
     if (!changed) setDisplayWinnerView(previous);
+  }
+  async function raiseObjection() {
+    if (!window.confirm("Demand one final Gold + Silver vote from everyone? Each room gets one objection.")) return;
+    setObjectionPending(true);
+    try {
+      await mutate(`/api/rooms/${roomId}/winner/objection`, "POST", {});
+    } finally {
+      setObjectionPending(false);
+    }
+  }
+  function chooseObjectionCandidate(candidateId: string) {
+    if (candidateId === objectionGoldId) {
+      setObjectionGoldId(undefined);
+      setObjectionRank("GOLD");
+      return;
+    }
+    if (candidateId === objectionSilverId) {
+      setObjectionSilverId(undefined);
+      setObjectionRank("SILVER");
+      return;
+    }
+    if (objectionRank === "GOLD") {
+      setObjectionGoldId(candidateId);
+      setObjectionRank("SILVER");
+    } else {
+      setObjectionSilverId(candidateId);
+    }
+  }
+  async function lockObjectionBallot() {
+    if (!objectionGoldId || !objectionSilverId) return;
+    setObjectionPending(true);
+    try {
+      await mutate(`/api/rooms/${roomId}/winner/objection/ballot`, "PUT", {
+        goldCandidateId: objectionGoldId,
+        silverCandidateId: objectionSilverId,
+      });
+    } finally {
+      setObjectionPending(false);
+    }
   }
   async function pairing() {
     try {
@@ -402,6 +467,12 @@ export default function RoomPage() {
     setPlexConnected(status.connected);
     setPlexStatusLoaded(true);
     setPlexAccountLabel(status.accountLabel ?? undefined);
+    const participantId = snapshot?.viewerParticipantId;
+    if (participantId) {
+      const key = `watch-bracket:plex:${participantId}`;
+      if (status.connected) window.sessionStorage.setItem(key, status.accountLabel ?? "Plex connected");
+      else window.sessionStorage.removeItem(key);
+    }
     if (status.connected && loadSuggestions) await loadPlexWatchlist();
     return status.connected;
   }
@@ -442,6 +513,7 @@ export default function RoomPage() {
       setPlexWatchlist([]);
       setPlexRecommendations([]);
       setPlexMessage("Plex disconnected from this room profile.");
+      if (snapshot?.viewerParticipantId) window.sessionStorage.removeItem(`watch-bracket:plex:${snapshot.viewerParticipantId}`);
     } catch (reason) {
       setPlexMessage(reason instanceof Error ? reason.message : "Could not disconnect Plex.");
     }
@@ -1159,7 +1231,90 @@ export default function RoomPage() {
               {snapshot.tournament.champion.redemption && (
                 <p className="notice">Returned through redemption</p>
               )}
-              <div className="winner-actions">
+              {!snapshot.tournament.objection && (
+                <div className="objection-callout">
+                  <span className="objection-burst" aria-hidden="true">!</span>
+                  <div>
+                    <p className="kicker">One last chance to cause a scene</p>
+                    <h2>Think the podium got it wrong?</h2>
+                    <p>Any one player can demand the room&apos;s single Gold + Silver overtime vote.</p>
+                  </div>
+                  <button className="danger objection-trigger" disabled={objectionPending} onClick={() => void raiseObjection()}>
+                    {objectionPending ? "Raising objection…" : "I object!"}
+                  </button>
+                </div>
+              )}
+              {snapshot.tournament.objection && (
+                <div className="objection-panel" data-status={snapshot.tournament.objection.status}>
+                  <p className="objection-kicker">
+                    {snapshot.tournament.objection.status === "OPEN"
+                      ? `${snapshot.tournament.objection.objectorNickname} has objected!`
+                      : snapshot.tournament.objection.championChanged
+                        ? "Objection sustained — new podium!"
+                        : "Objection overruled — the original winner holds!"}
+                  </p>
+                  {snapshot.tournament.objection.status === "OPEN" ? (
+                    !snapshot.tournament.objection.viewerEligible ? (
+                      <div className="objection-locked">
+                        <strong>The overtime vote is already underway.</strong>
+                        <span>You joined after the objection, so you can watch the ruling come in.</span>
+                      </div>
+                    ) : snapshot.tournament.objection.ownBallot ? (
+                      <div className="objection-locked">
+                        <strong>Your Gold + Silver ballot is locked.</strong>
+                        <span>{snapshot.tournament.objection.ballotsReceived} of {snapshot.tournament.objection.eligibleVoters} players voted</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="objection-rank-slots">
+                          <button type="button" className={objectionRank === "GOLD" ? "selected" : "secondary"} onClick={() => setObjectionRank("GOLD")}>
+                            <span>🥇 Gold</span>
+                            <strong>{snapshot.tournament.objection.candidates.find((candidate) => candidate.id === objectionGoldId)?.title ?? "Tap a finalist"}</strong>
+                          </button>
+                          <button type="button" className={objectionRank === "SILVER" ? "selected" : "secondary"} onClick={() => setObjectionRank("SILVER")}>
+                            <span>🥈 Silver</span>
+                            <strong>{snapshot.tournament.objection.candidates.find((candidate) => candidate.id === objectionSilverId)?.title ?? "Tap a finalist"}</strong>
+                          </button>
+                        </div>
+                        <p className="objection-prompt">
+                          {!objectionGoldId ? "Pick your Gold winner" : !objectionSilverId ? "Now pick Silver" : "Ballot ready — tap a medal slot to make a change"}
+                        </p>
+                        <div className="objection-finalists">
+                          {snapshot.tournament.objection.candidates.map((candidate) => {
+                            const medal = candidate.id === objectionGoldId ? "GOLD" : candidate.id === objectionSilverId ? "SILVER" : null;
+                            return (
+                              <button type="button" className={`objection-finalist ${medal ? "selected" : ""}`} aria-pressed={Boolean(medal)} key={candidate.id} onClick={() => chooseObjectionCandidate(candidate.id)}>
+                                <span className="matchup-poster-frame">
+                                  {candidate.posterUrl ? <img src={candidate.posterUrl} alt="" /> : <span className="poster-placeholder" aria-hidden="true">WB</span>}
+                                  {medal && <b className={`objection-medal ${medal.toLowerCase()}`}>{medal === "GOLD" ? "🥇" : "🥈"}</b>}
+                                </span>
+                                <strong>{candidate.title}</strong>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <button disabled={!objectionGoldId || !objectionSilverId || objectionPending} onClick={() => void lockObjectionBallot()}>
+                          {objectionPending ? "Locking ballot…" : "Lock in Gold + Silver"}
+                        </button>
+                        <small>{snapshot.tournament.objection.ballotsReceived} of {snapshot.tournament.objection.eligibleVoters} ballots locked · Gold = 2 points, Silver = 1</small>
+                      </>
+                    )
+                  ) : (
+                    <div className="objection-results">
+                      {[...snapshot.tournament.objection.candidates]
+                        .sort((a, b) => (a.finalPlacement ?? 9) - (b.finalPlacement ?? 9))
+                        .map((candidate) => (
+                          <article key={candidate.id}>
+                            <span>{candidate.finalPlacement === 1 ? "🥇" : candidate.finalPlacement === 2 ? "🥈" : "🥉"}</span>
+                            <strong>{candidate.title}</strong>
+                            <small>{candidate.points} pts · {candidate.goldVotes} Gold · {candidate.silverVotes} Silver</small>
+                          </article>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {snapshot.tournament.objection?.status !== "OPEN" && <div className="winner-actions">
                 <div className="qr-frame"><QRCodeSVG value={winnerActionUrl} size={142} fgColor="#06194d" bgColor="#fffdf0" /></div>
                 <div className="stack">
                   {snapshot.tournament.champion.localAvailability?.plexUrl && <a className="button-link winner-primary-action" href={snapshot.tournament.champion.localAvailability.plexUrl} target="_blank" rel="noreferrer">▶ Watch now on Plex</a>}
@@ -1172,7 +1327,7 @@ export default function RoomPage() {
                   {host && <button className="secondary" disabled={winnerActionPending} onClick={()=>void replay()}>Run It Back</button>}
                   {winnerActionMessage && <p className="notice" role="status">{winnerActionMessage}</p>}
                 </div>
-              </div>
+              </div>}
               <div className="winner-path"><h2>Winner Journey</h2>{snapshot.tournament.bracket.filter((result)=>result.winnerId===snapshot.tournament!.champion!.id).map((result)=><span className="provider-badge" key={result.key}>Defeated {result.loserTitle}</span>)}</div>
               {snapshot.tournament.tasteSnapshot && (
                 <div className="taste-snapshot taste-snapshot-playful">

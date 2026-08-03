@@ -28,6 +28,12 @@ const candidateB = {
   strikes: 1,
   redemption: true,
 };
+const candidateC = {
+  ...candidateA,
+  id: "33333333-3333-4333-8333-333333333333",
+  title: "Kestrel Station",
+  seed: 4,
+};
 function fixture(mode: string): DisplayScene {
   const deadline = new Date(Date.now() + 83_000).toISOString();
   const roomIdentity = {
@@ -87,23 +93,20 @@ function fixture(mode: string): DisplayScene {
       tieBreak: null,
       deadline,
     };
-  if (mode === "winner" || mode === "bracket")
+  if (["winner", "bracket", "objection", "objection-result"].includes(mode))
     return {
       type: "WINNER",
       ...roomIdentity,
       displayMode: mode === "bracket" ? "BRACKET" : "AUTO",
-      winner: { ...candidateB, strikes: 1 },
-      podium: [
-        { ...candidateB, strikes: 1, placement: 1 },
-        { ...candidateA, placement: 2 },
-        {
-          ...candidateA,
-          id: "33333333-3333-4333-8333-333333333333",
-          title: "Kestrel Station",
-          seed: 4,
-          placement: 3,
-        },
-      ],
+      winner: mode === "objection-result" ? candidateA : { ...candidateB, strikes: 1 },
+      objection: mode === "objection"
+        ? { status: "OPEN", objectorNickname: "Maya", eligibleVoters: 4, ballotsReceived: 2, championChanged: null, candidates: [candidateB, candidateA, candidateC].map((candidate) => ({ ...candidate, goldVotes: null, silverVotes: null, points: null, finalPlacement: null })) }
+        : mode === "objection-result"
+          ? { status: "COMPLETED", objectorNickname: "Maya", eligibleVoters: 4, ballotsReceived: 4, championChanged: true, candidates: [{ ...candidateB, goldVotes: 1, silverVotes: 1, points: 3, finalPlacement: 2 as const }, { ...candidateA, goldVotes: 2, silverVotes: 2, points: 6, finalPlacement: 1 as const }, { ...candidateC, goldVotes: 1, silverVotes: 1, points: 3, finalPlacement: 3 as const }] }
+          : null,
+      podium: mode === "objection-result"
+        ? [{ ...candidateA, placement: 1 }, { ...candidateB, strikes: 1, placement: 2 }, { ...candidateC, placement: 3 }]
+        : [{ ...candidateB, strikes: 1, placement: 1 }, { ...candidateA, placement: 2 }, { ...candidateC, placement: 3 }],
       path: [
         { stage: "QUALIFIER", opponentTitle: "Moonlight Market" },
         { stage: "REDEMPTION", opponentTitle: "Aurora Drift" },
@@ -147,7 +150,7 @@ export default function TestMode() {
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
     const requested = query.get("scene");
-    if (["lobby", "nominations", "intro", "voting", "result", "winner", "bracket"].includes(requested ?? "")) setMode(requested!);
+    if (["lobby", "nominations", "intro", "voting", "result", "winner", "bracket", "objection", "objection-result"].includes(requested ?? "")) setMode(requested!);
     setDemo(query.get("demo") === "1");
   }, []);
   const width = preset === "720p" ? 1280 : 1920;
@@ -196,6 +199,8 @@ export default function TestMode() {
               "result",
               "winner",
               "bracket",
+              "objection",
+              "objection-result",
             ].map((value) => (
               <option key={value}>{value}</option>
             ))}

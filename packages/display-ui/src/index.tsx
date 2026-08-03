@@ -115,10 +115,11 @@ body:has(.wb-display-canvas){margin:0!important;border-top:0!important;overflow:
 .wb-arena-card{display:grid!important;grid-template-columns:minmax(120px,42%) minmax(0,1fr);align-items:center;gap:clamp(.65rem,1.4vw,1.4rem);height:100%;min-height:0!important;padding:clamp(.55rem,1.2vh,1rem)!important;text-align:left;overflow:hidden}.wb-arena-card .wb-poster,.wb-result-poster{width:100%;height:auto;max-height:100%;aspect-ratio:2/3;object-fit:cover;border:4px solid #ffd637;box-shadow:8px 9px 0 #020a25}.wb-arena-card .wb-copy{min-width:0}.wb-arena-card h2{display:-webkit-box;overflow:hidden;margin:.15em 0;font-size:clamp(1.65rem,5.4vh,4rem)!important;line-height:.95;-webkit-box-orient:vertical;-webkit-line-clamp:3}.wb-arena-card p{margin:.35em 0;line-height:1.15}
 .wb-winner-shell{position:relative!important;display:grid!important;grid-template-columns:1fr!important;grid-template-rows:auto minmax(0,1fr) auto;height:100vh;height:100dvh;padding:clamp(.65rem,1.8vh,1.2rem) 3.5vw clamp(.65rem,1.5vh,1rem)!important;text-align:center}.wb-winner-header{min-height:0}.wb-winner-header .wb-brand-frame{width:clamp(240px,25vw,420px);margin-bottom:0}.wb-winner-header h1{font-size:clamp(2.4rem,7vh,5.5rem)!important;line-height:.92;margin:.02em 0!important}.wb-winner-stage{display:grid;grid-template-columns:minmax(0,2.25fr) minmax(230px,.75fr);align-items:center;gap:clamp(1rem,3vw,3rem);min-height:0;width:min(94vw,1450px);margin:auto}.wb-winner-stage-main{min-width:0}.wb-display-podium{display:flex;align-items:flex-end;justify-content:center;gap:clamp(.65rem,1.5vw,1.4rem);margin:clamp(.7rem,2vh,1.25rem) auto .35rem}.wb-podium-place{position:relative;width:clamp(105px,min(13vw,17vh),230px);display:grid;gap:.3rem;padding:.4rem .4rem .65rem;border:3px solid #4e79c8;background:#031847;box-shadow:7px 8px 0 #020a25;animation:wb-champion .8s cubic-bezier(.2,.9,.2,1) both}.wb-podium-place[data-placement="1"]{order:2;width:clamp(135px,min(17vw,22vh),290px);padding-bottom:.9rem;border-color:#ffd637}.wb-podium-place[data-placement="2"]{order:1}.wb-podium-place[data-placement="3"]{order:3}.wb-podium-place img,.wb-podium-place .wb-poster-fallback{width:100%;min-height:0;aspect-ratio:2/3;object-fit:cover}.wb-podium-place strong{overflow:hidden;font-size:clamp(.8rem,1.5vw,1.35rem);line-height:1.05;text-overflow:ellipsis;white-space:nowrap}.wb-podium-medal{position:absolute;top:-.8rem;left:50%;z-index:2;padding:.15rem .55rem;border:2px solid #fff;border-radius:999px;background:#ffd637;color:#06194d;font-size:clamp(.8rem,1.4vw,1.25rem);font-weight:900;transform:translateX(-50%)}
 .wb-winner-meta{margin:.25rem!important;font-size:clamp(.9rem,1.8vw,1.5rem)!important}.wb-winner-action{display:grid!important;justify-items:center!important;align-content:center;gap:clamp(.45rem,1.2vh,.8rem);padding:clamp(.7rem,1.8vh,1.2rem)!important;text-align:center!important}.wb-winner-action h2{margin:0;font-size:clamp(1.25rem,2.4vw,2rem)}.wb-winner-action p{margin:.2rem 0}.wb-winner-action-qr{padding:clamp(4px,.7vh,7px)!important}.wb-winner-action-qr svg{display:block;width:min(18vw,20vh,155px);height:auto}.wb-winner-path{display:flex;justify-content:center;gap:.55rem;flex-wrap:wrap;margin-top:.35rem;min-height:0}.wb-winner-path>span{padding:.25em .6em!important;font-size:clamp(.68rem,1.1vw,.86rem)!important}
+.wb-objection-banner{position:absolute;top:clamp(.7rem,1.8vh,1.2rem);left:2vw;z-index:24;display:flex;align-items:center;gap:clamp(.5rem,1.2vw,1rem);max-width:38vw;padding:.4rem .8rem;border:3px solid #fff7bc;background:#ef3e46;color:#fff;box-shadow:6px 7px 0 #020a25;transform:rotate(-1deg);animation:wb-card-in .45s cubic-bezier(.2,.9,.2,1) both}.wb-objection-banner strong{font-family:Impact,sans-serif;font-size:clamp(1.1rem,2.3vw,2.1rem);letter-spacing:.035em;text-transform:uppercase}.wb-objection-banner span{font-size:clamp(.72rem,1.1vw,1rem);font-weight:900}.wb-objection-banner[data-status="COMPLETED"]{background:#0c8f62;border-color:#9fffdc}
 .wb-bracket-shell{position:relative!important;display:grid!important;grid-template-columns:1fr!important;grid-template-rows:auto minmax(0,1fr) auto;height:100vh;height:100dvh;padding:clamp(.7rem,2vh,1.25rem) 2.5vw!important}.wb-bracket-header{display:flex;align-items:center;justify-content:center;min-height:0;text-align:center}.wb-bracket-header .wb-brand{position:absolute;left:2.5vw;top:clamp(.6rem,1.4vh,1rem);width:clamp(210px,19vw,340px)}.wb-bracket-header h1{margin:.05em 0;font-size:clamp(2.3rem,6.5vh,4.6rem);line-height:.95}.wb-elimination-bracket{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(130px,1fr);gap:clamp(.45rem,1vw,1rem);min-height:0;padding:.4rem 0}.wb-bracket-round{display:grid;grid-template-rows:auto minmax(0,1fr);min-width:0;min-height:0}.wb-bracket-round>h3{margin:.15rem 0 .35rem;color:#50c9e8;font-size:clamp(.65rem,1.15vw,.95rem);letter-spacing:.08em;text-align:center;text-transform:uppercase}.wb-bracket-matches{display:flex;flex-direction:column;justify-content:space-around;gap:clamp(.2rem,.7vh,.45rem);min-height:0}.wb-bracket-match{position:relative;display:grid;grid-template-rows:1fr 1fr;min-width:0;border:1px solid #4e79c8;background:#031847;box-shadow:3px 3px 0 #020a25}.wb-bracket-match::after{position:absolute;top:50%;right:calc(-1 * clamp(.5rem,1vw,1rem));width:clamp(.5rem,1vw,1rem);border-top:2px solid #4e79c8;content:""}.wb-bracket-round:last-child .wb-bracket-match::after{display:none}.wb-bracket-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:.3rem;min-width:0;padding:clamp(.14rem,.45vh,.28rem) .35rem;font-size:clamp(.58rem,1vw,.78rem);line-height:1.05}.wb-bracket-entry+ .wb-bracket-entry{border-top:1px solid #174aa2}.wb-bracket-entry span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.wb-bracket-entry strong{color:#ffd637;font-size:1.1em}.wb-bracket-entry.winner{background:#174aa255;color:#fffbea;font-weight:900}.wb-bracket-entry.eliminated{color:#829ac5;text-decoration:line-through}.wb-bracket-abstentions{position:absolute;right:.2rem;bottom:-.72rem;color:#829ac5;font-size:.52rem}.wb-taste-reveal{position:relative;display:grid;grid-template-columns:auto 1fr;align-items:center;gap:clamp(.55rem,1.2vw,1rem);width:min(92vw,1100px);margin:.35rem auto 0;padding:clamp(.4rem,1vh,.65rem) clamp(.7rem,1.5vw,1.2rem);overflow:hidden;border:2px solid #ffd637;background:linear-gradient(100deg,#ef3e46,#9d255d 50%,#174aa2);box-shadow:5px 6px 0 #020a25;text-align:left;transform:rotate(-.25deg)}.wb-taste-icon{display:grid;place-items:center;width:clamp(42px,6vh,62px);aspect-ratio:1;border:2px solid #fff7bc;border-radius:50%;background:#ffd637;font-size:clamp(1.4rem,3.5vh,2.4rem);transform:rotate(-8deg)}.wb-taste-reveal small{display:block;color:#fff7bc;font-weight:900;letter-spacing:.12em}.wb-taste-reveal strong{display:block;font-family:Impact,sans-serif;font-size:clamp(1.05rem,2.7vh,1.8rem);letter-spacing:.025em}.wb-taste-reveal em{color:#fffbea;font-size:clamp(.68rem,1.5vh,.9rem)}
 [data-low-power=true] .wb-confetti{display:none}[data-low-power=true] [data-wb-scene],[data-low-power=true] .wb-candidate-card,[data-low-power=true] .wb-champion-poster,[data-low-power=true] .wb-podium-place{animation-duration:.15s;filter:none!important}
 @media(max-height:800px){.wb-display-canvas{border-top-width:6px!important}.wb-brand-frame{width:clamp(230px,25vw,340px)}.wb-lobby,.wb-nominations{padding:clamp(.85rem,2.5vh,1.25rem) 4vw!important}.wb-lobby h1,.wb-nominations h1{font-size:clamp(1.7rem,4.5vh,2.5rem)}.wb-lobby p,.wb-nominations p{margin:.45em 0}.wb-room-badge{padding:.3rem .6rem}.wb-arena-header .wb-brand,.wb-bracket-header .wb-brand{width:clamp(210px,18vw,280px)}.wb-arena-header h1{font-size:clamp(2rem,6.3vh,3.6rem)!important}.wb-arena-header p{font-size:clamp(.75rem,1.8vh,1rem)}.wb-arena-card h2{font-size:clamp(1.5rem,4.8vh,2.7rem)!important}.wb-winner-header .wb-brand-frame{width:clamp(250px,24vw,340px)}.wb-winner-action-qr svg{width:min(16vw,18vh,130px)}.wb-bracket-header h1{font-size:clamp(2rem,5.8vh,3.2rem)}.wb-taste-reveal{margin-top:0;padding:.25rem .7rem;transform:none}.wb-taste-icon{width:42px}.wb-taste-reveal small{font-size:.58rem;line-height:1}.wb-taste-reveal strong{font-size:1rem;line-height:1.05}.wb-taste-reveal em{font-size:.68rem;line-height:1}}
-@media(max-aspect-ratio:4/3){.wb-lobby,.wb-nominations{grid-template-columns:1fr!important;grid-template-rows:auto minmax(0,1fr);text-align:center}.wb-lobby .wb-brand-frame,.wb-nominations .wb-brand-frame{margin-inline:auto}.wb-lobby-qr{margin-inline:auto}.wb-lobby>section:last-child{min-height:0}.wb-arena-floor{grid-template-columns:1fr!important;grid-template-rows:minmax(0,1fr) auto minmax(0,1fr);width:90vw;height:calc(100% - 1rem)!important}.wb-arena-card{grid-template-columns:1fr;height:100%}.wb-arena-card .wb-poster,.wb-result-poster{width:auto;max-width:100%;max-height:31vh;margin:auto}.wb-arena-card .wb-poster-fallback{width:min(46vw,260px)}.wb-arena-card .wb-copy{display:none}.wb-arena-vs{width:clamp(58px,10vw,80px);justify-self:center}.wb-winner-stage{grid-template-columns:1fr}.wb-winner-action{grid-template-columns:auto auto;justify-content:center!important}.wb-winner-action-qr{grid-row:1/3}.wb-winner-action .wb-taste{display:none}.wb-bracket-header{padding-top:70px}.wb-bracket-header h1{font-size:clamp(2rem,7vw,3.2rem)}.wb-bracket-shell .wb-elimination-bracket{grid-auto-columns:minmax(82px,1fr);gap:.25rem}.wb-bracket-shell .wb-bracket-entry{font-size:.54rem;padding:.16rem .2rem}.wb-bracket-shell .wb-bracket-round>h3{font-size:.56rem;letter-spacing:0}.wb-taste-reveal{width:min(94vw,1100px)}}
+@media(max-aspect-ratio:4/3){.wb-objection-banner{display:none}.wb-lobby,.wb-nominations{grid-template-columns:1fr!important;grid-template-rows:auto minmax(0,1fr);text-align:center}.wb-lobby .wb-brand-frame,.wb-nominations .wb-brand-frame{margin-inline:auto}.wb-lobby-qr{margin-inline:auto}.wb-lobby>section:last-child{min-height:0}.wb-arena-floor{grid-template-columns:1fr!important;grid-template-rows:minmax(0,1fr) auto minmax(0,1fr);width:90vw;height:calc(100% - 1rem)!important}.wb-arena-card{grid-template-columns:1fr;height:100%}.wb-arena-card .wb-poster,.wb-result-poster{width:auto;max-width:100%;max-height:31vh;margin:auto}.wb-arena-card .wb-poster-fallback{width:min(46vw,260px)}.wb-arena-card .wb-copy{display:none}.wb-arena-vs{width:clamp(58px,10vw,80px);justify-self:center}.wb-winner-stage{grid-template-columns:1fr}.wb-winner-action{grid-template-columns:auto auto;justify-content:center!important}.wb-winner-action-qr{grid-row:1/3}.wb-winner-action .wb-taste{display:none}.wb-bracket-header{padding-top:70px}.wb-bracket-header h1{font-size:clamp(2rem,7vw,3.2rem)}.wb-bracket-shell .wb-elimination-bracket{grid-auto-columns:minmax(82px,1fr);gap:.25rem}.wb-bracket-shell .wb-bracket-entry{font-size:.54rem;padding:.16rem .2rem}.wb-bracket-shell .wb-bracket-round>h3{font-size:.56rem;letter-spacing:0}.wb-taste-reveal{width:min(94vw,1100px)}}
 @media(prefers-reduced-motion:reduce){[data-wb-scene],.wb-candidate-card,.wb-champion-poster,.wb-podium-place,.wb-winner-path{animation:none!important}.wb-confetti{display:none!important}}
 `;
 
@@ -708,9 +709,14 @@ export function RoomDisplay({
   const sceneDeadline = "deadline" in scene ? scene.deadline : null;
   const seconds = useSecondsRemaining(sceneDeadline);
   const winnerKey = scene.type === "WINNER" ? `${scene.roomCode}:${scene.winner.id}` : "";
+  const objectionKey = scene.type === "WINNER" ? `${scene.objection?.status ?? "NONE"}:${scene.objection?.ballotsReceived ?? 0}` : "";
   const [showWinnerBracket, setShowWinnerBracket] = useState(false);
   useEffect(() => {
     if (scene.type !== "WINNER") {
+      setShowWinnerBracket(false);
+      return;
+    }
+    if (scene.objection?.status === "OPEN") {
       setShowWinnerBracket(false);
       return;
     }
@@ -721,7 +727,7 @@ export function RoomDisplay({
     setShowWinnerBracket(false);
     const timer = window.setTimeout(() => setShowWinnerBracket(true), 10_000);
     return () => window.clearTimeout(timer);
-  }, [scene.type, scene.type === "WINNER" ? scene.displayMode : null, winnerKey]);
+  }, [scene.type, scene.type === "WINNER" ? scene.displayMode : null, winnerKey, objectionKey]);
 
   if (scene.type === "LOBBY" || scene.type === "NOMINATION_PROGRESS")
     return <LegacyRoomDisplay scene={scene} connection={connection} logoSrc={logoSrc} lowPower={lowPower} />;
@@ -730,11 +736,29 @@ export function RoomDisplay({
     return (
       <main className="wb-display-canvas wb-bracket-shell" style={styles.canvas} data-wb-scene="winner-bracket" data-low-power={lowPower}>
         <RoomJoinBadge roomCode={scene.roomCode} />
+        {scene.objection && (
+          <div className="wb-objection-banner" data-status={scene.objection.status}>
+            <strong>
+              {scene.objection.status === "OPEN"
+                ? `${scene.objection.objectorNickname} objects!`
+                : scene.objection.championChanged
+                  ? "Objection sustained!"
+                  : "Original ruling stands!"}
+            </strong>
+            <span>
+              {scene.objection.status === "OPEN"
+                ? `${scene.objection.ballotsReceived} of ${scene.objection.eligibleVoters} overtime ballots locked`
+                : "Gold + Silver overtime is final"}
+            </span>
+          </div>
+        )}
         <header className="wb-bracket-header">
           <div className="wb-brand"><BrandMark src={logoSrc} /></div>
           <div>
-            <small style={{ color: "#fbbf24", fontWeight: 900, letterSpacing: ".12em" }}>THE ROAD TO THE WINNER</small>
-            <h1>How {scene.winner.title} won</h1>
+            <small style={{ color: "#fbbf24", fontWeight: 900, letterSpacing: ".12em" }}>
+              {scene.objection?.championChanged ? "THE BRACKET + OVERTIME RULING" : "THE ROAD TO THE WINNER"}
+            </small>
+            <h1>{scene.objection?.championChanged ? `${scene.winner.title} won the final vote` : `How ${scene.winner.title} won`}</h1>
           </div>
         </header>
         <EliminationBracket results={scene.bracket} />
@@ -751,6 +775,22 @@ export function RoomDisplay({
         data-low-power={lowPower}
       >
         <RoomJoinBadge roomCode={scene.roomCode} />
+        {scene.objection && (
+          <div className="wb-objection-banner" data-status={scene.objection.status}>
+            <strong>
+              {scene.objection.status === "OPEN"
+                ? `${scene.objection.objectorNickname} objects!`
+                : scene.objection.championChanged
+                  ? "Objection sustained!"
+                  : "Original ruling stands!"}
+            </strong>
+            <span>
+              {scene.objection.status === "OPEN"
+                ? `${scene.objection.ballotsReceived} of ${scene.objection.eligibleVoters} overtime ballots locked`
+                : "Gold + Silver overtime is final"}
+            </span>
+          </div>
+        )}
         <div className="wb-confetti" aria-hidden="true">
           {Array.from({ length: 28 }, (_, index) => (
             <i key={index} style={{ left: `${(index * 37) % 100}%`, animationDelay: `${(index % 9) * -.31}s`, animationDuration: `${2.4 + (index % 5) * .22}s` }} />
@@ -758,8 +798,10 @@ export function RoomDisplay({
         </div>
         <header className="wb-winner-header">
           <BrandMark src={logoSrc} centered />
-          <div style={{ color: "#fbbf24", fontWeight: 900 }}>TONIGHT&apos;S WINNER</div>
-          <h1>{scene.winner.title}</h1>
+          <div style={{ color: "#fbbf24", fontWeight: 900 }}>
+            {scene.objection?.status === "OPEN" ? "THE PODIUM HAS BEEN CHALLENGED" : "TONIGHT'S WINNER"}
+          </div>
+          <h1>{scene.objection?.status === "OPEN" ? "Gold + Silver overtime" : scene.winner.title}</h1>
         </header>
         <section className="wb-winner-stage">
           <div className="wb-winner-stage-main">
@@ -775,16 +817,25 @@ export function RoomDisplay({
             <p className="wb-winner-meta">
               {scene.winner.mediaType} · {scene.winner.releaseYear} · {scene.winner.runtimeMinutes} min · Seed #{scene.winner.seed}
             </p>
-            <AvailabilityStrip availability={scene.winner.availability} />
+            {scene.objection?.status !== "OPEN" && <AvailabilityStrip availability={scene.winner.availability} />}
           </div>
-          <aside className="wb-winner-action" style={styles.person}>
-            <h2>{scene.actionLabel}</h2>
-            <div className="wb-winner-action-qr" style={{ background: "#fffdf0", padding: 6, border: "3px solid #ffd637", lineHeight: 0 }}>
-              <QRCodeSVG value={scene.actionUrl} size={140} fgColor="#06194d" bgColor="#fffdf0" />
-            </div>
-            {scene.winner.localAvailability?.available && <p style={{ color: "#7dd3fc", fontWeight: 900 }}>IN PLEX · READY TO WATCH</p>}
-            {scene.winner.requestAvailability?.requestable && <p style={{ color: "#f0abfc", fontWeight: 900 }}>REQUESTABLE IN SEERR</p>}
-          </aside>
+          {scene.objection?.status === "OPEN" ? (
+            <aside className="wb-winner-action" style={{ ...styles.person, borderColor: "#ff5964" }}>
+              <div style={{ fontSize: "clamp(3rem,8vh,6rem)" }} aria-hidden="true">⚖️</div>
+              <h2>Podium under review</h2>
+              <p style={{ color: "#fbbf24", fontWeight: 900 }}>{scene.objection.ballotsReceived} of {scene.objection.eligibleVoters} ballots locked</p>
+              <p>Choose Gold + Silver on your phone.</p>
+            </aside>
+          ) : (
+            <aside className="wb-winner-action" style={styles.person}>
+              <h2>{scene.actionLabel}</h2>
+              <div className="wb-winner-action-qr" style={{ background: "#fffdf0", padding: 6, border: "3px solid #ffd637", lineHeight: 0 }}>
+                <QRCodeSVG value={scene.actionUrl} size={140} fgColor="#06194d" bgColor="#fffdf0" />
+              </div>
+              {scene.winner.localAvailability?.available && <p style={{ color: "#7dd3fc", fontWeight: 900 }}>IN PLEX · READY TO WATCH</p>}
+              {scene.winner.requestAvailability?.requestable && <p style={{ color: "#f0abfc", fontWeight: 900 }}>REQUESTABLE IN SEERR</p>}
+            </aside>
+          )}
         </section>
         <footer>
           <div className="wb-winner-path">

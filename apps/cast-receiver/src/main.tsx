@@ -130,6 +130,22 @@ function toScene(value: unknown): DisplayScene {
       joinUrl: publicJoinUrl(snapshot.code),
       displayMode: "AUTO",
       winner: candidate(tournament.champion),
+      objection: tournament.objection
+        ? {
+            status: tournament.objection.status,
+            objectorNickname: tournament.objection.objectorNickname,
+            eligibleVoters: tournament.objection.eligibleVoters,
+            ballotsReceived: tournament.objection.ballotsReceived,
+            championChanged: tournament.objection.championChanged,
+            candidates: tournament.objection.candidates.map((item) => ({
+              ...candidate(item),
+              goldVotes: item.goldVotes,
+              silverVotes: item.silverVotes,
+              points: item.points,
+              finalPlacement: item.finalPlacement,
+            })),
+          }
+        : null,
       podium: tournament.podium.map((item) => ({
         ...candidate(item),
         placement: item.placement,

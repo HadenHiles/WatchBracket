@@ -29,6 +29,7 @@ import { DomainError, requireRoomHost } from "./domain.js";
 import { prepareTmdbWildcards } from "./recommendations.js";
 import { ensureRoomHistory, getRoomTasteSnapshot } from "./history.js";
 import { getPlexInventory } from "./providers.js";
+import { parseObjectionState } from "./objections.js";
 
 const INTRO_SECONDS = 3,
   RESULT_SECONDS = 4;
@@ -980,7 +981,7 @@ export async function getTournamentData(
     : state.completed.filter((result) =>
         result.matchup.stage === "CHAMPIONSHIP_PLAY_IN",
       );
-  const podium = finalResult
+  const bracketPodium = finalResult
     ? [
         { ...media(finalResult.winnerId), placement: 1 as const },
         { ...media(finalResult.loserId), placement: 2 as const },
@@ -995,6 +996,21 @@ export async function getTournamentData(
           .slice(0, 2),
       ]
     : [];
+  const objectionState = parseObjectionState(tournament.objectionState);
+  const objectionResults = new Map(
+    (objectionState?.result ?? []).map((result) => [result.candidateId, result]),
+  );
+  const podium = objectionState?.result
+    ? objectionState.result.map((result) => ({
+        ...media(result.candidateId),
+        placement: result.placement,
+      }))
+    : bracketPodium;
+  const ownObjectionBallot = viewerParticipantId
+    ? objectionState?.ballots.find(
+        (ballot) => ballot.participantId === viewerParticipantId,
+      )
+    : undefined;
   return {
     format: tournament.format as TournamentFormat,
     totalMatchups: state.format === 8 ? 9 : state.format === 12 ? 15 : 19,
@@ -1003,6 +1019,40 @@ export async function getTournamentData(
     status: tournament.status,
     tasteSnapshot,
     champion: state.championId ? media(state.championId) : null,
+    objection: objectionState
+      ? {
+          status: objectionState.status,
+          objectorNickname: objectionState.objectorNickname,
+          eligibleVoters: objectionState.eligibleParticipantIds.length,
+          ballotsReceived: objectionState.ballots.length,
+          viewerEligible: Boolean(
+            viewerParticipantId &&
+              objectionState.eligibleParticipantIds.includes(viewerParticipantId),
+          ),
+          ownBallot: ownObjectionBallot
+            ? {
+                goldCandidateId: ownObjectionBallot.goldCandidateId,
+                silverCandidateId: ownObjectionBallot.silverCandidateId,
+              }
+            : null,
+          candidates: objectionState.candidateIds.map((candidateId, index) => {
+            const result = objectionResults.get(candidateId);
+            return {
+              ...media(candidateId),
+              originalPlacement: (index + 1) as 1 | 2 | 3,
+              goldVotes: result?.goldVotes ?? null,
+              silverVotes: result?.silverVotes ?? null,
+              points: result?.points ?? null,
+              finalPlacement: result?.placement ?? null,
+            };
+          }),
+          championChanged:
+            objectionState.status === "COMPLETED" && objectionState.result?.[0]
+              ? objectionState.result[0].candidateId !==
+                objectionState.originalChampionId
+              : null,
+        }
+      : null,
     podium,
     activeMatchup: active
       ? {

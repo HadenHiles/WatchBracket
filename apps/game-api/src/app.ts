@@ -75,8 +75,9 @@ import {
   startPlexAuth,
   unlinkPlex,
 } from "./providers.js";
-import { clearHouseholdHistory } from "./history.js";
+import { clearHouseholdHistory, ensureRoomHistory } from "./history.js";
 import { runItBack } from "./replay.js";
+import { openObjection, submitObjectionBallot } from "./objections.js";
 
 const LoginSchema = z.object({
   email: z.email(),
@@ -137,6 +138,10 @@ const WinnerRequestSchema = z.object({
 });
 const WinnerDisplayModeSchema = z.object({
   mode: z.enum(["PODIUM", "BRACKET"]),
+});
+const ObjectionBallotSchema = z.object({
+  goldCandidateId: z.uuid(),
+  silverCandidateId: z.uuid(),
 });
 const ParamsRoomSchema = z.object({ roomId: z.uuid() });
 const ParamsDisplaySchema = z.object({ displaySessionId: z.uuid() });
@@ -868,6 +873,76 @@ export async function buildApp(env: GameApiEnv) {
         );
       await realtime.setWinnerDisplayMode(roomId, mode);
       return { mode };
+    },
+  );
+  app.post(
+    "/api/rooms/:roomId/winner/objection",
+    { config: { rateLimit: { max: 3, timeWindow: "1 minute" } } },
+    async (request) => {
+      await mutationGuard(request);
+      const { roomId } = parse(ParamsRoomSchema, request.params);
+      const participant = await resolveParticipant(
+        context,
+        request.cookies[COOKIE.participant],
+      );
+      if (!participant || participant.roomId !== roomId)
+        throw new DomainError(
+          "ROOM_SESSION_REQUIRED",
+          "Join this room before raising an objection.",
+          401,
+        );
+      const objection = await openObjection(
+        context,
+        roomId,
+        participant.id,
+        realtime.presence.participantIds,
+      );
+      await realtime.broadcastRoom(roomId, "room:objection");
+      return {
+        status: objection.status,
+        eligibleVoters: objection.eligibleParticipantIds.length,
+      };
+    },
+  );
+  app.put(
+    "/api/rooms/:roomId/winner/objection/ballot",
+    async (request) => {
+      await mutationGuard(request);
+      const { roomId } = parse(ParamsRoomSchema, request.params);
+      const participant = await resolveParticipant(
+        context,
+        request.cookies[COOKIE.participant],
+      );
+      if (!participant || participant.roomId !== roomId)
+        throw new DomainError(
+          "ROOM_SESSION_REQUIRED",
+          "Join this room before voting on the objection.",
+          401,
+        );
+      const result = await submitObjectionBallot(
+        context,
+        roomId,
+        participant.id,
+        parse(ObjectionBallotSchema, request.body),
+      );
+      if (result.completed) {
+        const followups = await Promise.allSettled([
+          ensureRoomHistory(app.db, roomId),
+          refreshChampionPlexAvailability(context, roomId),
+        ]);
+        if (followups.some((followup) => followup.status === "rejected"))
+          request.log.warn(
+            { roomId },
+            "Objection completed, but a winner enrichment follow-up failed.",
+          );
+      }
+      await realtime.broadcastRoom(roomId, "room:objection");
+      return {
+        status: result.objection.status,
+        completed: result.completed,
+        ballotsReceived: result.objection.ballots.length,
+        eligibleVoters: result.objection.eligibleParticipantIds.length,
+      };
     },
   );
   app.post(

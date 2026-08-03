@@ -1,0 +1,1 @@
+ALTER TABLE "tournaments" ADD COLUMN "objection_state_json" jsonb;

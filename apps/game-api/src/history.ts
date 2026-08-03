@@ -100,7 +100,11 @@ export async function ensureRoomHistory(db: Database, roomId: string) {
     })
     .onConflictDoUpdate({
       target: watchBracketHistory.roomId,
-      set: { tasteSnapshot: snapshot, candidateMediaItemIds: pool.map((item) => item.mediaItemId) },
+      set: {
+        winnerMediaItemId: champion.mediaItemId,
+        tasteSnapshot: snapshot,
+        candidateMediaItemIds: pool.map((item) => item.mediaItemId),
+      },
     })
     .returning();
   return stored;

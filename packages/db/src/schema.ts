@@ -218,6 +218,7 @@ export const tournaments = pgTable('tournaments', {
   engineState: jsonb('engine_state_json').notNull(),
   status: tournamentStatus('status').notNull().default('ACTIVE'),
   championCandidateId: uuid('champion_candidate_id').references(() => candidates.id),
+  objectionState: jsonb('objection_state_json'),
   startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp('completed_at', { withTimezone: true }),
   ...timestamps

@@ -1,4 +1,4 @@
-import { PlexAuthStartResultSchema, PlexAuthStatusResultSchema, PlexInventoryResultSchema, PlexUnlinkResultSchema, PlexWatchlistResultSchema, SeerrRequestResultSchema, SeerrStatusResultSchema, TautulliHistoryResultSchema, TmdbDetailsResultSchema, TmdbRecommendationsResultSchema, TmdbSearchResultSchema, type CanonicalMediaItem, type ProviderOperation, type RecommendationCandidate } from '@watch-bracket/provider-contracts';
+import { PlexAuthStartResultSchema, PlexAuthStatusResultSchema, PlexGroupPreferencesResultSchema, PlexInventoryResultSchema, PlexUnlinkResultSchema, PlexWatchlistResultSchema, SeerrRequestResultSchema, SeerrStatusResultSchema, TautulliHistoryResultSchema, TmdbDetailsResultSchema, TmdbRecommendationsResultSchema, TmdbSearchResultSchema, type CanonicalMediaItem, type ProviderOperation, type RecommendationCandidate } from '@watch-bracket/provider-contracts';
 import type { DomainContext } from './domain.js';
 import { DomainError } from './domain.js';
 
@@ -92,6 +92,21 @@ export async function getPlexWatchlist(ctx: DomainContext, participantId: string
   const payload = await operation(ctx, { provider: 'PLEX', operation: 'PLEX_WATCHLIST', input: { participantId, region, language: `en-${region}`, limit: 16 } });
   const parsed = PlexWatchlistResultSchema.safeParse(payload);
   if (!parsed.success) throw new DomainError('PLEX_INVALID_RESPONSE', 'Plex returned an invalid watchlist.', 502);
+  return parsed.data;
+}
+
+export async function getGroupPlexPreferences(ctx: DomainContext, participantIds: string[]) {
+  if (!participantIds.length) return { participants: [], refreshedAt: new Date().toISOString() };
+  const payload = await operation(ctx, { provider: 'PLEX', operation: 'PLEX_GROUP_PREFERENCES', input: { participantIds, limitPerParticipant: 8 } });
+  const parsed = PlexGroupPreferencesResultSchema.safeParse(payload);
+  if (!parsed.success) throw new DomainError('PLEX_INVALID_RESPONSE', 'Plex returned invalid group preferences.', 502);
+  return parsed.data;
+}
+
+export async function getTautulliHistory(ctx: DomainContext, limit = 500) {
+  const payload = await operation(ctx, { provider: 'TAUTULLI', operation: 'TAUTULLI_HISTORY', input: { limit } });
+  const parsed = TautulliHistoryResultSchema.safeParse(payload);
+  if (!parsed.success) throw new DomainError('TAUTULLI_INVALID_RESPONSE', 'Tautulli returned invalid viewing history.', 502);
   return parsed.data;
 }
 

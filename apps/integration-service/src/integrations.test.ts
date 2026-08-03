@@ -11,8 +11,9 @@ describe('private media integrations', () => {
       if (path === '/library/sections') return json({ MediaContainer: { Directory: [{ key: '1', title: 'Movies', type: 'movie' }] } });
       return json({ MediaContainer: { Metadata: [{ ratingKey: '99', title: 'Dune', year: 2021, Guid: [{ id: 'tmdb://438631' }] }] } });
     });
-    const result = await new PlexProvider('http://plex.local:32400', 'super-secret-token', fetcher as typeof fetch).inventory();
+    const result = await new PlexProvider('http://plex.local:32400', 'super-secret-token', 'https://plex.example.test', fetcher as typeof fetch).inventory();
     expect(result.items[0]).toMatchObject({ tmdbId: 438631, ratingKey: '99', libraryTitle: 'Movies' });
+    expect(result.items[0]?.plexUrl).toBe('https://plex.example.test/web/index.html#!/server/server-1/details?key=%2Flibrary%2Fmetadata%2F99');
     expect(JSON.stringify(result)).not.toContain('super-secret-token');
   });
 
@@ -31,13 +32,13 @@ describe('private media integrations', () => {
       expect(JSON.parse(String(init?.body))).toEqual({ mediaType: 'tv', mediaId: 1399, seasons: [1] });
       return json({ id: 42, media: { status: 2 } });
     });
-    const result = await new SeerrProvider('http://seerr.local', 'secret-key', fetcher as typeof fetch).request({ tmdbId: 1399, mediaType: 'TV', tvSeasonPolicy: 'FIRST' });
+    const result = await new SeerrProvider('http://seerr.local', 'secret-key', undefined, fetcher as typeof fetch).request({ tmdbId: 1399, mediaType: 'TV', tvSeasonPolicy: 'FIRST' });
     expect(result).toEqual({ requestId: 42, status: 'PENDING' });
   });
 
   it('provides a credential-free direct Jellyseerr title link', async () => {
     const fetcher = vi.fn(() => json({ mediaInfo: { status: 1 } }));
-    const result = await new SeerrProvider('https://seerr.example.test', 'secret-key', fetcher as typeof fetch)
+    const result = await new SeerrProvider('http://seerr.internal', 'secret-key', 'https://seerr.example.test', fetcher as typeof fetch)
       .statuses([{ tmdbId: 438631, mediaType: 'MOVIE' }]);
     expect(result[0]).toMatchObject({
       requestable: true,
@@ -54,7 +55,7 @@ describe('private media integrations', () => {
       expect(JSON.parse(String(init?.body))).toEqual({ mediaType: 'tv', mediaId: 1399, seasons: [4] });
       return json({ id: 43, media: { status: 2 } });
     });
-    const result = await new SeerrProvider('http://seerr.local', 'secret-key', fetcher as typeof fetch).request({ tmdbId: 1399, mediaType: 'TV', tvSeasonPolicy: 'LATEST' });
+    const result = await new SeerrProvider('http://seerr.local', 'secret-key', undefined, fetcher as typeof fetch).request({ tmdbId: 1399, mediaType: 'TV', tvSeasonPolicy: 'LATEST' });
     expect(result).toEqual({ requestId: 43, status: 'PENDING' });
     expect(fetcher).toHaveBeenCalledTimes(2);
   });

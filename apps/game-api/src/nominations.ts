@@ -6,7 +6,7 @@ import type { CanonicalMediaItem } from '@watch-bracket/provider-contracts';
 import { HouseRulesSchema, type HouseRules } from '@watch-bracket/realtime-protocol';
 import type { DomainContext } from './domain.js';
 import { DomainError, requireRoomHost } from './domain.js';
-import { detailsFromTmdb, enrichWithHouseholdProviders, getPlexWatchlist, searchTmdb } from './providers.js';
+import { detailsFromTmdb, enrichWithHouseholdProviders, getPlexWatchlist, getTautulliHistory, recommendFromTmdb, searchTmdb } from './providers.js';
 import { eligibilityFailures } from './eligibility.js';
 
 export const HOUSE_RULE_PRESETS: Record<HouseRules['preset'], HouseRules> = {
@@ -74,6 +74,56 @@ export async function plexWatchlistSuggestions(ctx: DomainContext, roomId: strin
   const cachedUntil = new Date(Date.now() + 6 * 60 * 60_000).toISOString();
   await cacheTmdbItems(ctx, valid, cachedUntil, roomId);
   return { source: 'PLEX' as const, items: valid.map((item) => ({ catalogKey: item.catalogKey, mediaType: item.mediaType, title: item.title, releaseYear: item.releaseYear, runtimeMinutes: item.runtimeMinutes!, contentRating: item.contentRating ?? 'Unrated', genres: item.genres, synopsis: item.synopsis, posterUrl: item.posterUrl, availability: item.availability, localAvailability: item.localAvailability, requestAvailability: item.requestAvailability })) };
+}
+
+const suggestionDto = (item: CanonicalMediaItem) => ({
+  catalogKey: item.catalogKey,
+  mediaType: item.mediaType,
+  title: item.title,
+  releaseYear: item.releaseYear,
+  runtimeMinutes: item.runtimeMinutes ?? 0,
+  contentRating: item.contentRating ?? 'Unrated',
+  genres: item.genres,
+  synopsis: item.synopsis,
+  posterUrl: item.posterUrl,
+  availability: item.availability,
+  localAvailability: item.localAvailability,
+  requestAvailability: item.requestAvailability,
+});
+
+export async function plexPersonalizedSuggestions(ctx: DomainContext, roomId: string, participantId: string) {
+  const [room] = await ctx.db.select({ rules: rooms.rules, householdId: rooms.householdId }).from(rooms).where(eq(rooms.id, roomId)).limit(1);
+  if (!room) throw new DomainError('ROOM_NOT_FOUND', 'Room not found.', 404);
+  const [household] = await ctx.db.select({ region: households.region }).from(households).where(eq(households.id, room.householdId)).limit(1);
+  const region = household?.region ?? 'CA';
+  const rules = HouseRulesSchema.parse(room.rules);
+  const [watchlistResult, historyResult] = await Promise.all([
+    getPlexWatchlist(ctx, participantId, region),
+    getTautulliHistory(ctx, 300).catch(() => ({ items: [] })),
+  ]);
+  const watchlist = (await enrichWithHouseholdProviders(ctx, watchlistResult.items))
+    .filter((item) => eligibilityFailures(item, rules).length === 0);
+  const preferenceSeeds = [
+    ...watchlist.slice(0, 10).map(({ tmdbId, mediaType }) => ({ tmdbId, mediaType })),
+    ...historyResult.items.flatMap((item) => item.tmdbId && item.mediaType ? [{ tmdbId: item.tmdbId, mediaType: item.mediaType }] : []).slice(0, 6),
+  ];
+  const seeds = [...new Map(preferenceSeeds.map((item) => [`${item.mediaType}:${item.tmdbId}`, item])).values()].slice(0, 16);
+  let recommended: CanonicalMediaItem[] = [];
+  if (seeds.length) {
+    const result = await recommendFromTmdb(ctx, { seeds, region, limit: 20 });
+    const watchlistKeys = new Set(watchlist.map((item) => item.catalogKey));
+    recommended = (await enrichWithHouseholdProviders(ctx, result.candidates.map((candidate) => candidate.item)))
+      .filter((item) => !watchlistKeys.has(item.catalogKey) && eligibilityFailures(item, rules).length === 0)
+      .slice(0, 12);
+    await cacheTmdbItems(ctx, recommended, result.cachedUntil, roomId);
+  }
+  await cacheTmdbItems(ctx, watchlist, new Date(Date.now() + 6 * 60 * 60_000).toISOString(), roomId);
+  return {
+    source: 'PLEX' as const,
+    watchlist: watchlist.map(suggestionDto),
+    recommended: recommended.map(suggestionDto),
+    tasteSource: historyResult.items.length ? 'PLEX_AND_TAUTULLI' as const : 'PLEX' as const,
+  };
 }
 
 export async function startNominations(ctx: DomainContext, participantId: string, roomId: string, input: HouseRules) {

@@ -50,6 +50,7 @@ import { startExpirationScheduler } from "./scheduler.js";
 import {
   closeNominations,
   extendNominations,
+  plexPersonalizedSuggestions,
   searchCatalog,
   plexWatchlistSuggestions,
   seedMockCatalog,
@@ -573,6 +574,23 @@ export async function buildApp(env: GameApiEnv) {
         401,
       );
     return plexWatchlistSuggestions(
+      context,
+      participant.roomId,
+      participant.id,
+    );
+  });
+  app.get("/api/catalog/plex-suggestions", async (request) => {
+    const participant = await resolveParticipant(
+      context,
+      request.cookies[COOKIE.participant],
+    );
+    if (!participant)
+      throw new DomainError(
+        "ROOM_SESSION_REQUIRED",
+        "Join a room before loading personalized suggestions.",
+        401,
+      );
+    return plexPersonalizedSuggestions(
       context,
       participant.roomId,
       participant.id,

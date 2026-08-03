@@ -29,9 +29,9 @@ export const IntegrationEnvSchema = base.pick({ NODE_ENV: true, DATABASE_URL: tr
   PORT: z.coerce.number().int().positive().default(3002),
   INTEGRATION_SERVICE_SHARED_SECRET: secret,
   TMDB_API_READ_TOKEN: z.string().optional(),
-  PLEX_BASE_URL: z.string().optional(), PLEX_TOKEN: z.string().optional(),
+  PLEX_BASE_URL: z.string().optional(), PLEX_PUBLIC_URL: z.url().optional(), PLEX_TOKEN: z.string().optional(),
   TAUTULLI_BASE_URL: z.string().optional(), TAUTULLI_API_KEY: z.string().optional(),
-  SEERR_BASE_URL: z.string().optional(), SEERR_API_KEY: z.string().optional()
+  SEERR_BASE_URL: z.string().optional(), SEERR_PUBLIC_URL: z.url().optional(), SEERR_API_KEY: z.string().optional()
 });
 
 export function parseEnv<T>(schema: z.ZodType<T>, env: NodeJS.ProcessEnv): T {

@@ -12,9 +12,9 @@ const app = Fastify({ logger: { redact: ['req.headers.authorization', 'req.heade
 const configured = (value?: string) => Boolean(value && !value.toLowerCase().includes('replace-me'));
 const authorized = (request: { headers: Record<string, unknown> }) => request.headers['x-integration-secret'] === env.INTEGRATION_SERVICE_SHARED_SECRET;
 const tmdb = new TmdbProvider(env.TMDB_API_READ_TOKEN);
-const plex = new PlexProvider(env.PLEX_BASE_URL, env.PLEX_TOKEN);
+const plex = new PlexProvider(env.PLEX_BASE_URL, env.PLEX_TOKEN, env.PLEX_PUBLIC_URL);
 const tautulli = new TautulliProvider(env.TAUTULLI_BASE_URL, env.TAUTULLI_API_KEY);
-const seerr = new SeerrProvider(env.SEERR_BASE_URL, env.SEERR_API_KEY);
+const seerr = new SeerrProvider(env.SEERR_BASE_URL, env.SEERR_API_KEY, env.SEERR_PUBLIC_URL);
 const participantPlex = new ParticipantPlexAccounts(database.db, env.INTEGRATION_SERVICE_SHARED_SECRET);
 app.get('/internal/health/live', async () => ({ status: 'ok' }));
 app.get('/internal/health/ready', async () => ({ status: 'ready' }));
@@ -28,9 +28,9 @@ app.get('/internal/setup/status', async (request, reply) => {
   const [plexStatus, tautulliStatus, seerrStatus] = await Promise.all([probe(plex), probe(tautulli), probe(seerr)]);
   return { providers: {
     TMDB: { configured: configured(env.TMDB_API_READ_TOKEN), requiredVariables: ['TMDB_API_READ_TOKEN'] },
-    PLEX: { ...plexStatus, requiredVariables: ['PLEX_BASE_URL', 'PLEX_TOKEN'] },
+    PLEX: { ...plexStatus, requiredVariables: ['PLEX_BASE_URL', 'PLEX_PUBLIC_URL', 'PLEX_TOKEN'] },
     TAUTULLI: { ...tautulliStatus, requiredVariables: ['TAUTULLI_BASE_URL', 'TAUTULLI_API_KEY'] },
-    SEERR: { ...seerrStatus, requiredVariables: ['SEERR_BASE_URL', 'SEERR_API_KEY'] }
+    SEERR: { ...seerrStatus, requiredVariables: ['SEERR_BASE_URL', 'SEERR_PUBLIC_URL', 'SEERR_API_KEY'] }
   } };
 });
 app.post('/internal/providers/operation', async (request, reply) => {
@@ -55,6 +55,19 @@ app.post('/internal/providers/operation', async (request, reply) => {
       const items = (await Promise.allSettled(references.map((item) => tmdb.details(item.mediaType, item.tmdbId, input.region, input.language))))
         .flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
       return { ok: true, provider: 'PLEX', operation: 'PLEX_WATCHLIST', items, refreshedAt: new Date().toISOString() };
+    }
+    if (parsed.data.operation === 'PLEX_GROUP_PREFERENCES') {
+      const input = parsed.data.input;
+      const participants = (await Promise.all(input.participantIds.map(async (participantId) => {
+        try {
+          const items = await participantPlex.watchlist(participantId, input.limitPerParticipant);
+          return { participantId, items: items.map(({ tmdbId, mediaType }) => ({ tmdbId, mediaType })) };
+        } catch (error) {
+          if (error instanceof IntegrationProviderError && error.code === 'NOT_CONFIGURED') return { participantId, items: [] };
+          throw error;
+        }
+      }))).filter((participant) => participant.items.length > 0);
+      return { ok: true, provider: 'PLEX', operation: 'PLEX_GROUP_PREFERENCES', participants, refreshedAt: new Date().toISOString() };
     }
     if (parsed.data.operation === 'PLEX_UNLINK') return { ok: true, provider: 'PLEX', operation: 'PLEX_UNLINK', ...await participantPlex.unlink(parsed.data.input.participantId) };
     if (parsed.data.operation === 'TAUTULLI_HISTORY') return { ok: true, provider: 'TAUTULLI', operation: 'TAUTULLI_HISTORY', ...await tautulli.history(parsed.data.input.limit) };

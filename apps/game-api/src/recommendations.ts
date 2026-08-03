@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import {
   candidates,
   households,
   mediaItems,
+  participants,
   rooms,
   submissions,
   type Database,
@@ -15,6 +16,8 @@ import { eligibilityFailures } from "./eligibility.js";
 import { cacheTmdbItems } from "./nominations.js";
 import {
   enrichWithHouseholdProviders,
+  getGroupPlexPreferences,
+  getTautulliHistory,
   recommendFromTmdb,
 } from "./providers.js";
 import { getRecentMediaExclusions } from "./history.js";
@@ -39,6 +42,8 @@ function scoreCandidate(
   directGenres: Map<string, number>,
   roomSeed: string,
   referenceYear: number,
+  preferenceOwners: Map<string, Set<string>>,
+  householdHistorySeedKeys: Set<string>,
 ) {
   const item = candidate.item;
   const watchNow =
@@ -69,6 +74,15 @@ function scoreCandidate(
     1 - Math.log10((item.householdHistoryScore ?? 0) + 1) / 3,
   );
   const requestable = item.requestAvailability?.requestable ? 1 : 0;
+  const matchingPeople = new Set(
+    candidate.relatedSeedKeys.flatMap((key) => [
+      ...(preferenceOwners.get(key) ?? []),
+    ]),
+  );
+  const groupPreferenceFit = clamp(matchingPeople.size / 2);
+  const householdHistoryFit = candidate.relatedSeedKeys.some((key) =>
+    householdHistorySeedKeys.has(key),
+  ) ? 1 : 0;
   const scoreComponents = {
     similarity,
     availableNow,
@@ -80,6 +94,8 @@ function scoreCandidate(
     novelty,
     householdFit,
     requestable,
+    groupPreferenceFit,
+    householdHistoryFit,
   };
   const weighted =
     similarity * 0.22 +
@@ -91,7 +107,9 @@ function scoreCandidate(
     eraFit * 0.05 +
     novelty * 0.03 +
     householdFit * 0.06 +
-    requestable * 0.02;
+    requestable * 0.02 +
+    groupPreferenceFit * 0.06 +
+    householdHistoryFit * 0.02;
   const reasons = [
     candidate.relatedSeedKeys.length > 1
       ? `Similar to ${candidate.relatedSeedKeys.length} group picks`
@@ -114,6 +132,12 @@ function scoreCandidate(
     candidate.sourceKinds.includes("RECOMMENDATIONS")
       ? "Recommended by TMDB"
       : "Similar title from TMDB",
+    matchingPeople.size > 1
+      ? `Matches ${matchingPeople.size} players' Plex tastes`
+      : matchingPeople.size === 1
+        ? "Matches a player's Plex tastes"
+        : undefined,
+    householdHistoryFit ? "Fits household viewing history" : undefined,
   ].filter((reason): reason is string => Boolean(reason));
   return {
     scoreComponents,
@@ -157,23 +181,51 @@ export async function prepareTmdbWildcards(
       tmdbId: mediaItems.tmdbId,
       mediaType: mediaItems.mediaType,
       genres: mediaItems.genres,
+      participantId: submissions.participantId,
     })
     .from(submissions)
     .innerJoin(mediaItems, eq(submissions.mediaItemId, mediaItems.id))
     .where(eq(submissions.roomId, roomId));
-  const seeds = [
-    ...new Map(
-      direct
-        .filter(
-          (item): item is typeof item & { tmdbId: number } =>
-            item.tmdbId !== null,
-        )
-        .map((item) => [
-          item.catalogKey,
-          { tmdbId: item.tmdbId, mediaType: item.mediaType },
-        ]),
-    ).values(),
-  ];
+  const people = await ctx.db
+    .select({ id: participants.id })
+    .from(participants)
+    .where(and(eq(participants.roomId, roomId), isNull(participants.removedAt)));
+  const [plexPreferences, tautulliHistory] = await Promise.all([
+    getGroupPlexPreferences(ctx, people.map((person) => person.id)).catch(() => ({ participants: [] })),
+    getTautulliHistory(ctx, 500).catch(() => ({ items: [] })),
+  ]);
+  const preferenceOwners = new Map<string, Set<string>>();
+  const addPreferenceOwner = (key: string, participantId: string) => {
+    const owners = preferenceOwners.get(key) ?? new Set<string>();
+    owners.add(participantId);
+    preferenceOwners.set(key, owners);
+  };
+  for (const item of direct)
+    if (item.tmdbId)
+      addPreferenceOwner(item.catalogKey, item.participantId);
+  for (const person of plexPreferences.participants)
+    for (const item of person.items)
+      addPreferenceOwner(`tmdb:${item.mediaType}:${item.tmdbId}`, person.participantId);
+  const householdHistorySeedKeys = new Set(
+    tautulliHistory.items.flatMap((item) =>
+      item.tmdbId && item.mediaType ? [`tmdb:${item.mediaType}:${item.tmdbId}`] : [],
+    ),
+  );
+  const seedEntries = new Map<string, { tmdbId: number; mediaType: "MOVIE" | "TV" }>();
+  for (const item of direct)
+    if (item.tmdbId)
+      seedEntries.set(item.catalogKey, { tmdbId: item.tmdbId, mediaType: item.mediaType });
+  for (const person of plexPreferences.participants)
+    for (const item of person.items) {
+      const key = `tmdb:${item.mediaType}:${item.tmdbId}`;
+      if (!seedEntries.has(key)) seedEntries.set(key, item);
+    }
+  for (const item of tautulliHistory.items)
+    if (item.tmdbId && item.mediaType) {
+      const key = `tmdb:${item.mediaType}:${item.tmdbId}`;
+      if (!seedEntries.has(key)) seedEntries.set(key, { tmdbId: item.tmdbId, mediaType: item.mediaType });
+    }
+  const seeds = [...seedEntries.values()].slice(0, 16);
   if (!seeds.length) return [];
   const result = await recommendFromTmdb(ctx, {
     seeds,
@@ -249,6 +301,8 @@ export async function prepareTmdbWildcards(
             directGenres,
             room.randomSeed,
             room.createdAt.getUTCFullYear(),
+            preferenceOwners,
+            householdHistorySeedKeys,
           ),
         },
       ];

@@ -46,5 +46,18 @@ test('nominations keep picks pinned and contenders private by default', async ({
   await host.getByText('Host preview: reveal submitted titles').click();
   await expect(host.locator('.contender-preview')).toBeVisible();
 
+  await host.getByRole('button', { name: 'Build bracket and begin' }).click();
+  await expect(host.getByText('Matchup incoming. Voting opens when the intro completes.')).toBeVisible({ timeout: 15_000 });
+  await host.getByRole('button', { name: 'Skip presentation' }).click();
+  await expect(host.getByText('Tap a poster, then lock it in.')).toBeVisible();
+  await expect(guest.getByText('Tap a poster, then lock it in.')).toBeVisible();
+
+  await host.locator('button.matchup-poster-option').first().click();
+  await guest.locator('button.matchup-poster-option').first().click();
+  await host.getByRole('button', { name: 'Lock in pick' }).click();
+  await expect(host.getByRole('button', { name: 'Pick locked in' })).toBeVisible();
+  await guest.getByRole('button', { name: 'Lock in pick' }).click();
+  await expect(host.getByText('advances')).toBeVisible({ timeout: 5_000 });
+
   await Promise.all([hostContext.close(), guestContext.close()]);
 });

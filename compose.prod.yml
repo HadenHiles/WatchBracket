@@ -74,6 +74,9 @@ services:
 
   web:
     <<: *hardened
+    tmpfs:
+      - "/tmp:rw,noexec,nosuid,size=64m"
+      - "/app/apps/web/.next/cache:rw,noexec,nosuid,size=128m,mode=1777"
     image: ghcr.io/example/watch-bracket-web:local
     build:
       context: .

@@ -59,6 +59,11 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
     boxShadow: "5px 5px 0 #020a25",
   },
+  lobbyJoinRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "1.25vw",
+  },
   participants: {
     display: "grid",
     gap: "1rem",
@@ -227,29 +232,32 @@ export function LobbyDisplay({
   lowPower?: boolean;
 }) {
   return (
-    <main style={styles.canvas} data-wb-scene="lobby" data-low-power={lowPower}>
+    <main style={{ ...styles.canvas, gridTemplateColumns: "1.35fr 1fr", gap: "3vw" }} data-wb-scene="lobby" data-low-power={lowPower}>
       <section>
         <BrandMark src={logoSrc} />
         <h1>{scene.roomName}</h1>
         <p style={styles.joinAddress}>Join at {new URL(scene.joinUrl).host}</p>
-        <div style={styles.code}>{scene.roomCode}</div>
-        <div
-          style={{
-            background: "#fffdf0",
-            padding: 8,
-            border: "4px solid #ffd637",
-            borderRadius: 5,
-            boxShadow: "6px 6px 0 #ef3e46",
-            lineHeight: 0,
-            width: "fit-content",
-          }}
-        >
-          <QRCodeSVG
-            value={scene.joinUrl}
-            size={240}
-            fgColor="#06194d"
-            bgColor="#fffdf0"
-          />
+        <div style={styles.lobbyJoinRow}>
+          <div style={{ ...styles.code, margin: 0, fontSize: "clamp(4rem, 7vw, 8rem)" }}>{scene.roomCode}</div>
+          <div
+            style={{
+              background: "#fffdf0",
+              padding: 8,
+              border: "4px solid #ffd637",
+              borderRadius: 5,
+              boxShadow: "6px 6px 0 #ef3e46",
+              lineHeight: 0,
+              width: "fit-content",
+              flex: "0 0 auto",
+            }}
+          >
+            <QRCodeSVG
+              value={scene.joinUrl}
+              size={210}
+              fgColor="#06194d"
+              bgColor="#fffdf0"
+            />
+          </div>
         </div>
         <p>
           {scene.locked ? "🔒 Room locked" : "● Room open"} · {connection}

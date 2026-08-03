@@ -75,17 +75,20 @@ export default function RoomPage() {
   const [pairingCode, setPairingCode] = useState("");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CatalogItem[]>([]);
+  const [selectedItem, setSelectedItem] = useState<CatalogItem>();
   const [catalogSource, setCatalogSource] = useState<"TMDB" | "MOCK">();
   const [catalogWarning, setCatalogWarning] = useState("");
   const [searching, setSearching] = useState(false);
   const [rules, setRules] = useState<HouseRules>(presets.MOVIE_NIGHT);
   const [format, setFormat] = useState<8 | 12 | 16>(8);
   const [voteDuration, setVoteDuration] = useState(30);
+  const [selectedVoteId, setSelectedVoteId] = useState<string>();
   const [winnerActionMessage, setWinnerActionMessage] = useState("");
   const [tvSeasonPolicy, setTvSeasonPolicy] = useState<"FIRST" | "LATEST" | "ALL">("FIRST");
   const [winnerActionPending, setWinnerActionPending] = useState(false);
   const [effectsEnabled, setEffectsEnabled] = useState(false);
   const previousState = useRef<RoomSnapshot["state"] | undefined>(undefined);
+  const searchRequest = useRef(0);
   const sequence = useRef(0);
   const load = useCallback(async () => {
     try {
@@ -161,7 +164,50 @@ export default function RoomPage() {
   const voteCountdown = useCountdown(
     snapshot?.tournament?.activeMatchup?.deadline,
   );
+  const activeMatchup = snapshot?.tournament?.activeMatchup;
+  useEffect(() => {
+    setSelectedVoteId(activeMatchup?.ownVote?.candidateId ?? undefined);
+  }, [activeMatchup?.id, activeMatchup?.ownVote?.candidateId]);
   const host = snapshot?.viewer === "HOST";
+  useEffect(() => {
+    if (snapshot?.state !== "NOMINATING") return;
+    const term = query.trim();
+    if (term.length < 2) {
+      searchRequest.current += 1;
+      setResults([]);
+      setCatalogSource(undefined);
+      setCatalogWarning("");
+      setSearching(false);
+      return;
+    }
+    const requestId = ++searchRequest.current;
+    const timer = window.setTimeout(() => {
+      setSearching(true);
+      void api<{
+        items: CatalogItem[];
+        source: "TMDB" | "MOCK";
+        warning?: string;
+      }>(`/api/catalog/search?q=${encodeURIComponent(term)}&autocomplete=true`)
+        .then((response) => {
+          if (requestId !== searchRequest.current) return;
+          setResults(response.items);
+          setCatalogSource(response.source);
+          setCatalogWarning(response.warning ?? "");
+        })
+        .catch((reason: unknown) => {
+          if (requestId !== searchRequest.current) return;
+          setCatalogWarning(
+            reason instanceof Error
+              ? reason.message
+              : "Search suggestions are temporarily unavailable.",
+          );
+        })
+        .finally(() => {
+          if (requestId === searchRequest.current) setSearching(false);
+        });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [query, snapshot?.state]);
   async function mutate(path: string, method = "POST", body?: unknown) {
     setError("");
     try {
@@ -171,8 +217,10 @@ export default function RoomPage() {
           : { method, body: JSON.stringify(body) };
       await api(path, init);
       await load();
+      return true;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Request failed");
+      return false;
     }
   }
   async function pairing() {
@@ -211,24 +259,17 @@ export default function RoomPage() {
       router.replace(`/room/${result.roomId}`);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not create replay room"); setWinnerActionPending(false); }
   }
-  async function search(event: React.FormEvent) {
-    event.preventDefault();
-    setSearching(true);
-    setError("");
-    try {
-      const response = await api<{
-        items: CatalogItem[];
-        source: "TMDB" | "MOCK";
-        warning?: string;
-      }>(`/api/catalog/search?q=${encodeURIComponent(query)}`);
-      setResults(response.items);
-      setCatalogSource(response.source);
-      setCatalogWarning(response.warning ?? "");
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Search failed");
-    } finally {
-      setSearching(false);
+  async function assignPick(rank: 1 | 2, catalogKey: string) {
+    if (snapshot?.viewerReady) {
+      setError("Tap Edit picks before replacing a locked choice.");
+      return;
     }
+    if (
+      await mutate(`/api/rooms/${roomId}/submissions/${rank}`, "PUT", {
+        catalogKey,
+      })
+    )
+      setSelectedItem(undefined);
   }
   if (!snapshot)
     return (
@@ -491,167 +532,147 @@ export default function RoomPage() {
               {countdown}
             </div>
           </section>
-          <section className="card stack">
-            <h2>Your ranked picks</h2>
-            {[1, 2].map((rank) => {
-              const pick = snapshot.ownSubmissions.find(
-                (item) => item.rank === rank,
-              );
-              return (
-                <div className="ranked-pick" key={rank}>
-                  <span className="rank">#{rank}</span>
-                  <span>
+          <section className="card nomination-dock" aria-label="Your pinned picks">
+            <div className="nomination-dock-heading">
+              <div>
+                <p className="kicker">Pinned picks</p>
+                <h2>Your double feature</h2>
+              </div>
+              <div className="dock-timer" aria-label={`${countdown} remaining`}>
+                <small>Time left</small>
+                <strong>{countdown}</strong>
+              </div>
+            </div>
+            {selectedItem && !snapshot.viewerReady && (
+              <p className="pick-instruction" role="status">
+                Now tap Pick 1 or Pick 2 to place <strong>{selectedItem.title}</strong>.
+              </p>
+            )}
+            <div className="pick-slot-grid">
+              {([1, 2] as const).map((rank) => {
+                const pick = snapshot.ownSubmissions.find(
+                  (item) => item.rank === rank,
+                );
+                return (
+                  <button
+                    type="button"
+                    className={`pick-slot ${selectedItem && !snapshot.viewerReady ? "ready" : ""}`}
+                    key={rank}
+                    aria-label={
+                      pick
+                        ? `Pick ${rank}: ${pick.title}${selectedItem ? `. Replace with ${selectedItem.title}` : ""}`
+                        : `Pick ${rank}: empty${selectedItem ? `. Place ${selectedItem.title}` : ""}`
+                    }
+                    onClick={() =>
+                      selectedItem &&
+                      void assignPick(rank, selectedItem.catalogKey)
+                    }
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const catalogKey = event.dataTransfer.getData(
+                        "application/watch-bracket-catalog-key",
+                      );
+                      if (catalogKey) void assignPick(rank, catalogKey);
+                    }}
+                    disabled={snapshot.viewerReady}
+                  >
+                    <span className="rank">Pick {rank}</span>
                     {pick ? (
                       <>
+                        {pick.posterUrl ? (
+                          <img src={pick.posterUrl} alt="" />
+                        ) : (
+                          <span className="poster-placeholder" aria-hidden="true">WB</span>
+                        )}
                         <strong>{pick.title}</strong>
-                        <br />
-                        <small className="muted">
-                          {pick.mediaType} · {pick.releaseYear}
-                        </small>
                       </>
                     ) : (
-                      "Choose a title below"
+                      <span className="empty-pick">Tap after choosing a poster</span>
                     )}
-                  </span>
-                </div>
-              );
-            })}
-            <div className="actions">
-              <button
-                disabled={snapshot.ownSubmissions.length !== 2}
-                onClick={() =>
-                  void mutate(
-                    `/api/rooms/${roomId}/submissions/${snapshot.viewerReady ? "unlock" : "lock"}`,
-                  )
-                }
-              >
-                {snapshot.viewerReady ? "Edit picks" : "Lock in both picks"}
-              </button>
+                  </button>
+                );
+              })}
             </div>
+            <button
+              className={snapshot.viewerReady ? "secondary" : ""}
+              disabled={
+                !snapshot.viewerReady && snapshot.ownSubmissions.length !== 2
+              }
+              onClick={() =>
+                void mutate(
+                  `/api/rooms/${roomId}/submissions/${snapshot.viewerReady ? "unlock" : "lock"}`,
+                )
+              }
+            >
+              {snapshot.viewerReady ? "Edit picks" : "Lock in both picks"}
+            </button>
           </section>
-          <form className="card stack" onSubmit={search}>
-            <h2>Search movies &amp; TV</h2>
+          <section className="card stack">
+            <div>
+              <h2>Search movies &amp; TV</h2>
+              <p className="muted">
+                Suggestions appear as you type. Tap a poster, then choose a
+                pinned slot—or drag it onto a slot.
+              </p>
+            </div>
             <label>
-              Title
+              Find a title
               <input
-                required
-                minLength={1}
+                type="search"
+                autoComplete="off"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Try Dune or The Bear"
               />
             </label>
-            <button disabled={searching}>
-              {searching ? "Checking TMDB…" : "Search"}
-            </button>
+            <div className="search-state" aria-live="polite">
+              {searching
+                ? "Finding posters…"
+                : query.trim().length < 2
+                  ? "Type at least two characters"
+                  : `${results.length} suggestion${results.length === 1 ? "" : "s"}`}
+            </div>
             {catalogWarning && <p className="notice">{catalogWarning}</p>}
             {results.length === 0 && catalogSource && (
               <p className="muted">
                 No matching titles with complete runtime metadata.
               </p>
             )}
-            <div className="catalog-results">
+            <div className="poster-grid">
               {results.map((item) => (
-                <article className="catalog-item" key={item.catalogKey}>
-                  {item.posterUrl && (
+                <button
+                  type="button"
+                  className={`poster-choice ${selectedItem?.catalogKey === item.catalogKey ? "selected" : ""}`}
+                  key={item.catalogKey}
+                  aria-pressed={selectedItem?.catalogKey === item.catalogKey}
+                  aria-label={`Choose ${item.title}`}
+                  disabled={snapshot.viewerReady}
+                  draggable={!snapshot.viewerReady}
+                  onClick={() => setSelectedItem(item)}
+                  onDragStart={(event) => {
+                    setSelectedItem(item);
+                    event.dataTransfer.effectAllowed = "copy";
+                    event.dataTransfer.setData(
+                      "application/watch-bracket-catalog-key",
+                      item.catalogKey,
+                    );
+                  }}
+                >
+                  {item.posterUrl ? (
                     <img
-                      className="catalog-poster"
                       src={item.posterUrl}
                       alt=""
                       loading="lazy"
                     />
+                  ) : (
+                    <span className="poster-placeholder" aria-hidden="true">WB</span>
                   )}
-                  <div>
-                    <strong>{item.title}</strong>
-                    <br />
-                    <small className="muted">
-                      {item.mediaType} · {item.releaseYear} ·{" "}
-                      {item.runtimeMinutes} min · {item.contentRating} ·{" "}
-                      {item.genres.join(", ")}
-                    </small>
-                    <p>{item.synopsis}</p>
-                    {(item.localAvailability || item.requestAvailability) && (
-                      <div className="provider-badges" aria-label="Home media availability">
-                        {item.localAvailability?.available && (
-                          <span className="provider-badge local">In Plex · Watch now</span>
-                        )}
-                        {item.requestAvailability?.requestable && (
-                          <span className="provider-badge requestable">Seerr · Requestable</span>
-                        )}
-                        {item.requestAvailability && !item.requestAvailability.requestable && (
-                          <span className="provider-badge local">Seerr · {item.requestAvailability.status.toLowerCase()}</span>
-                        )}
-                      </div>
-                    )}
-                    {item.availability && (
-                      <div className="availability">
-                        <div className="provider-badges">
-                          {item.availability.offers.map((offer) => (
-                            <span
-                              className={`provider-badge ${offer.category.toLowerCase()}`}
-                              key={`${offer.category}:${offer.providerId}`}
-                            >
-                              {offer.providerName} ·{" "}
-                              {offer.category === "SUBSCRIPTION"
-                                ? "Stream"
-                                : offer.category === "ADS"
-                                  ? "Free with ads"
-                                  : offer.category[0] +
-                                    offer.category.slice(1).toLowerCase()}
-                            </span>
-                          ))}
-                        </div>
-                        <small className="muted">
-                          Streaming data by JustWatch
-                          {item.availability.link && (
-                            <>
-                              {" "}
-                              ·{" "}
-                              <a
-                                href={item.availability.link}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                View options
-                              </a>
-                            </>
-                          )}
-                        </small>
-                      </div>
-                    )}
-                  </div>
-                  <div className="actions">
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={() =>
-                        void mutate(
-                          `/api/rooms/${roomId}/submissions/1`,
-                          "PUT",
-                          { catalogKey: item.catalogKey },
-                        )
-                      }
-                    >
-                      Pick #1
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={() =>
-                        void mutate(
-                          `/api/rooms/${roomId}/submissions/2`,
-                          "PUT",
-                          { catalogKey: item.catalogKey },
-                        )
-                      }
-                    >
-                      Pick #2
-                    </button>
-                  </div>
-                </article>
+                  <strong>{item.title}</strong>
+                </button>
               ))}
             </div>
-          </form>
+          </section>
           {host && (
             <section className="card stack">
               <h2>Host timer controls</h2>
@@ -683,30 +704,11 @@ export default function RoomPage() {
       )}
       {revealed && (
         <section className="card stack">
-          <p className="brand">Nominations revealed</p>
-          <h1>The contenders</h1>
-          {snapshot.candidates.length ? (
-            <div className="catalog-results">
-              {snapshot.candidates.map((candidate) => (
-                <article className="candidate" key={candidate.catalogKey}>
-                  <span>
-                    <strong>{candidate.title}</strong>
-                    <br />
-                    <small className="muted">
-                      {candidate.mediaType} · {candidate.releaseYear} · best
-                      rank #{candidate.bestRank}
-                    </small>
-                  </span>
-                  <strong>
-                    {candidate.supportCount}{" "}
-                    {candidate.supportCount === 1 ? "supporter" : "supporters"}
-                  </strong>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <p>No titles were submitted.</p>
-          )}
+          <p className="brand">The picks are in</p>
+          <h1>Keep the lineup a surprise</h1>
+          <p className="muted">
+            Nominations stay under wraps until they appear in the bracket.
+          </p>
           {host && (
             <div className="stack">
               <h2>Build the Double-Take bracket</h2>
@@ -751,6 +753,25 @@ export default function RoomPage() {
               >
                 Build bracket and begin
               </button>
+              <details className="contender-disclosure">
+                <summary>Host preview: reveal submitted titles</summary>
+                {snapshot.candidates.length ? (
+                  <div className="poster-grid contender-preview">
+                    {snapshot.candidates.map((candidate) => (
+                      <article className="poster-choice" key={candidate.catalogKey}>
+                        {candidate.posterUrl ? (
+                          <img src={candidate.posterUrl} alt="" loading="lazy" />
+                        ) : (
+                          <span className="poster-placeholder" aria-hidden="true">WB</span>
+                        )}
+                        <strong>{candidate.title}</strong>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p>No titles were submitted.</p>
+                )}
+              </details>
             </div>
           )}
         </section>
@@ -807,37 +828,33 @@ export default function RoomPage() {
             snapshot.tournament.activeMatchup && (
               <>
                 <div className="versus">
-                  <article>
-                    <small>
-                      Seed #{snapshot.tournament.activeMatchup.candidateA.seed}
-                    </small>
-                    <h2>
-                      {snapshot.tournament.activeMatchup.candidateA.title}
-                    </h2>
-                    <p>
-                      {snapshot.tournament.activeMatchup.candidateA.releaseYear}{" "}
-                      ·{" "}
-                      {snapshot.tournament.activeMatchup.candidateA.genres
-                        .slice(0, 2)
-                        .join(", ")}
-                    </p>
-                  </article>
-                  <strong>VS</strong>
-                  <article>
-                    <small>
-                      Seed #{snapshot.tournament.activeMatchup.candidateB.seed}
-                    </small>
-                    <h2>
-                      {snapshot.tournament.activeMatchup.candidateB.title}
-                    </h2>
-                    <p>
-                      {snapshot.tournament.activeMatchup.candidateB.releaseYear}{" "}
-                      ·{" "}
-                      {snapshot.tournament.activeMatchup.candidateB.genres
-                        .slice(0, 2)
-                        .join(", ")}
-                    </p>
-                  </article>
+                  {([
+                    snapshot.tournament.activeMatchup.candidateA,
+                    snapshot.tournament.activeMatchup.candidateB,
+                  ] as const).map((candidate, index) => (
+                    <button
+                      type="button"
+                      className={`matchup-poster-option ${selectedVoteId === candidate.id ? "selected" : ""}`}
+                      key={candidate.id}
+                      aria-pressed={selectedVoteId === candidate.id}
+                      disabled={snapshot.state !== "VOTING"}
+                      onClick={() => setSelectedVoteId(candidate.id)}
+                    >
+                      <small>Seed #{candidate.seed}</small>
+                      <span className="matchup-poster-frame">
+                        {candidate.posterUrl ? (
+                          <img src={candidate.posterUrl} alt="" />
+                        ) : (
+                          <span className="poster-placeholder" aria-hidden="true">WB</span>
+                        )}
+                      </span>
+                      <strong>{candidate.title}</strong>
+                      <span className="matchup-metadata">
+                        {candidate.releaseYear} · {candidate.genres.slice(0, 2).join(", ")}
+                      </span>
+                      {index === 0 && <span className="versus-burst" aria-hidden="true">VS</span>}
+                    </button>
+                  ))}
                 </div>
                 {snapshot.state === "MATCHUP_INTRO" && (
                   <p className="notice">
@@ -845,64 +862,30 @@ export default function RoomPage() {
                   </p>
                 )}
                 {snapshot.state === "VOTING" && (
-                  <div className="stack">
+                  <div className="stack vote-lock-panel">
                     <p className="muted">
-                      Your vote stays private. You may update it until the
-                      server deadline.
+                      Tap a poster, then lock it in. Your vote stays private.
                     </p>
                     <button
-                      aria-pressed={snapshot.tournament.activeMatchup.ownVote?.candidateId === snapshot.tournament.activeMatchup.candidateA.id}
-                      className={
-                        snapshot.tournament.activeMatchup.ownVote
-                          ?.candidateId ===
-                        snapshot.tournament.activeMatchup.candidateA.id
-                          ? "vote selected"
-                          : "vote"
-                      }
+                      disabled={!selectedVoteId}
                       onClick={() =>
                         void mutate(
                           `/api/matchups/${snapshot.tournament!.activeMatchup!.id}/vote`,
                           "POST",
                           {
-                            candidateId:
-                              snapshot.tournament!.activeMatchup!.candidateA.id,
+                            candidateId: selectedVoteId,
                             abstain: false,
                           },
                         )
                       }
                     >
-                      Vote {snapshot.tournament.activeMatchup.candidateA.title}
-                    </button>
-                    <button
-                      aria-pressed={snapshot.tournament.activeMatchup.ownVote?.candidateId === snapshot.tournament.activeMatchup.candidateB.id}
-                      className={
-                        snapshot.tournament.activeMatchup.ownVote
-                          ?.candidateId ===
-                        snapshot.tournament.activeMatchup.candidateB.id
-                          ? "vote selected"
-                          : "vote"
-                      }
-                      onClick={() =>
-                        void mutate(
-                          `/api/matchups/${snapshot.tournament!.activeMatchup!.id}/vote`,
-                          "POST",
-                          {
-                            candidateId:
-                              snapshot.tournament!.activeMatchup!.candidateB.id,
-                            abstain: false,
-                          },
-                        )
-                      }
-                    >
-                      Vote {snapshot.tournament.activeMatchup.candidateB.title}
+                      {snapshot.tournament.activeMatchup.ownVote?.candidateId === selectedVoteId
+                        ? "Pick locked in"
+                        : "Lock in pick"}
                     </button>
                     <button
                       aria-pressed={snapshot.tournament.activeMatchup.ownVote?.abstained === true}
-                      className={
-                        snapshot.tournament.activeMatchup.ownVote?.abstained
-                          ? "secondary selected"
-                          : "secondary"
-                      }
+                      className="text-button"
                       onClick={() =>
                         void mutate(
                           `/api/matchups/${snapshot.tournament!.activeMatchup!.id}/vote`,
@@ -911,7 +894,7 @@ export default function RoomPage() {
                         )
                       }
                     >
-                      Abstain from this matchup
+                      Sit this matchup out
                     </button>
                   </div>
                 )}

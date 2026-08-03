@@ -428,6 +428,17 @@ export async function submitVote(
           updatedAt: new Date(),
         },
       });
+    const [ballotCount] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(votes)
+      .where(eq(votes.matchupId, matchupId));
+    const allVotesReceived =
+      eligible.length > 0 && (ballotCount?.count ?? 0) >= eligible.length;
+    if (allVotesReceived)
+      await tx
+        .update(matchups)
+        .set({ votingEndsAt: new Date() })
+        .where(and(eq(matchups.id, matchupId), eq(matchups.status, "VOTING")));
     await tx
       .update(rooms)
       .set({ version: sql`${rooms.version}+1`, updatedAt: new Date() })
@@ -436,6 +447,7 @@ export async function submitVote(
       roomId: matchup.roomId,
       matchupId,
       accepted: true,
+      allVotesReceived,
       abstained: input.abstain,
       candidateId: input.abstain ? null : input.candidateId!,
     };

@@ -101,6 +101,7 @@ const SetupSchema = z.object({
 const CatalogQuerySchema = z.object({
   q: z.string().trim().min(1).max(100),
   mediaType: z.enum(["MOVIE", "TV"]).optional(),
+  autocomplete: z.literal("true").optional().transform(Boolean),
 });
 const StartNominationsSchema = z.object({ rules: HouseRulesSchema });
 const ExtendNominationsSchema = z.object({
@@ -502,7 +503,13 @@ export async function buildApp(env: GameApiEnv) {
         401,
       );
     const query = parse(CatalogQuerySchema, request.query);
-    return searchCatalog(context, participant.roomId, query.q, query.mediaType);
+    return searchCatalog(
+      context,
+      participant.roomId,
+      query.q,
+      query.mediaType,
+      query.autocomplete,
+    );
   });
   app.post("/api/rooms/:roomId/nominations/start", async (request) => {
     await mutationGuard(request);
@@ -674,7 +681,15 @@ export async function buildApp(env: GameApiEnv) {
       matchupId,
       parse(VoteSchema, request.body),
     );
-    await realtime.broadcastRoom(result.roomId, "matchup:vote-accepted");
+    const transition = result.allVotesReceived
+      ? await processTournamentTransition(context, result.roomId)
+      : undefined;
+    await realtime.broadcastRoom(
+      result.roomId,
+      transition?.changed && transition.event
+        ? transition.event
+        : "matchup:vote-accepted",
+    );
     return result;
   });
   app.post("/api/rooms/:roomId/tournament/extend", async (request) => {

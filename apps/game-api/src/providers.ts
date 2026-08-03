@@ -20,8 +20,9 @@ async function operation(ctx: DomainContext, body: ProviderOperation): Promise<u
   return payload;
 }
 
-export async function searchTmdb(ctx: DomainContext, input: { query: string; mediaType: 'MOVIE' | 'TV' | undefined; region?: string }): Promise<{ items: CanonicalMediaItem[]; cachedUntil: string }> {
-  const searchInput = input.mediaType ? { query: input.query, mediaType: input.mediaType, region: input.region ?? 'CA', language: 'en-CA' as const, limit: 12 } : { query: input.query, region: input.region ?? 'CA', language: 'en-CA' as const, limit: 12 };
+export async function searchTmdb(ctx: DomainContext, input: { query: string; mediaType: 'MOVIE' | 'TV' | undefined; region?: string; limit?: number }): Promise<{ items: CanonicalMediaItem[]; cachedUntil: string }> {
+  const limit = input.limit ?? 12;
+  const searchInput = input.mediaType ? { query: input.query, mediaType: input.mediaType, region: input.region ?? 'CA', language: 'en-CA' as const, limit } : { query: input.query, region: input.region ?? 'CA', language: 'en-CA' as const, limit };
   const payload = await operation(ctx, { provider: 'TMDB', operation: 'SEARCH', input: searchInput });
   const parsed = TmdbSearchResultSchema.safeParse(payload);
   if (!parsed.success) throw new DomainError('CATALOG_INVALID_RESPONSE', 'The media catalog returned an invalid response.', 502);

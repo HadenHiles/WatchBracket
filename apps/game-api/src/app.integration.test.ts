@@ -152,11 +152,11 @@ suite('Milestones 1 through 3 API against PostgreSQL', () => {
       expect((await app.inject({ method: 'POST', url: `/api/rooms/${created.roomId}/tournament/skip-presentation`, headers: hostHeaders, payload: {} })).statusCode).toBe(200);
       tournamentSnapshot = (await app.inject({ method: 'GET', url: `/api/rooms/${created.roomId}/snapshot`, headers: { cookie: hostRoomCookies } })).json();
       expect(tournamentSnapshot.state).toBe('VOTING'); const active = tournamentSnapshot.tournament.activeMatchup;
-      expect((await app.inject({ method: 'POST', url: `/api/matchups/${active.id}/vote`, headers: hostHeaders, payload: { candidateId: active.candidateA.id, abstain: false } })).statusCode).toBe(200);
+      const firstVote = await app.inject({ method: 'POST', url: `/api/matchups/${active.id}/vote`, headers: hostHeaders, payload: { candidateId: active.candidateA.id, abstain: false } });
+      expect(firstVote.statusCode).toBe(200); expect(firstVote.json()).toMatchObject({ allVotesReceived: false });
       expect((await app.inject({ method: 'POST', url: `/api/matchups/${active.id}/vote`, headers: hostHeaders, payload: { candidateId: active.candidateB.id, abstain: false } })).statusCode).toBe(200);
-      expect((await app.inject({ method: 'POST', url: `/api/matchups/${active.id}/vote`, headers: guestHeaders, payload: { abstain: true } })).statusCode).toBe(200);
-      await inspector.db.update(matchups).set({ votingEndsAt: new Date(0) }).where(eq(matchups.id, active.id));
-      expect((await processTournamentTransition({ db: inspector.db, env }, created.roomId)).changed).toBe(true);
+      const finalVote = await app.inject({ method: 'POST', url: `/api/matchups/${active.id}/vote`, headers: guestHeaders, payload: { abstain: true } });
+      expect(finalVote.statusCode).toBe(200); expect(finalVote.json()).toMatchObject({ allVotesReceived: true });
       expect((await processTournamentTransition({ db: inspector.db, env }, created.roomId)).changed).toBe(false);
       const resultSnapshot = (await app.inject({ method: 'GET', url: `/api/displays/${castSession.displaySessionId}/snapshot`, headers: { authorization: `Bearer ${castSession.displayToken}` } })).json();
       expect(resultSnapshot).toMatchObject({ state: 'MATCHUP_RESULT', tournament: { activeMatchup: { sequence: matchupNumber, votesReceived: 2 } } });

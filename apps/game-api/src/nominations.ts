@@ -38,14 +38,16 @@ export async function cacheTmdbItems(ctx: DomainContext, items: CanonicalMediaIt
   }
 }
 
-export async function searchCatalog(ctx: DomainContext, roomId: string, query: string, mediaType?: 'MOVIE' | 'TV') {
+export async function searchCatalog(ctx: DomainContext, roomId: string, query: string, mediaType?: 'MOVIE' | 'TV', autocomplete = false) {
   const [room] = await ctx.db.select({ rules: rooms.rules, householdId: rooms.householdId }).from(rooms).where(eq(rooms.id, roomId)).limit(1);
   if (!room) throw new DomainError('ROOM_NOT_FOUND', 'Room not found.', 404);
   const [household]=await ctx.db.select({region:households.region}).from(households).where(eq(households.id,room.householdId)).limit(1);
   const rules = HouseRulesSchema.parse(room.rules);
   try {
-    const result = await searchTmdb(ctx, { query, mediaType, region: household?.region??'CA' });
-    const enriched = await enrichWithHouseholdProviders(ctx, result.items);
+    const result = await searchTmdb(ctx, { query, mediaType, region: household?.region??'CA', limit: autocomplete ? 8 : 12 });
+    const enriched = autocomplete && (rules.availabilityMode ?? 'ANY') === 'ANY'
+      ? result.items
+      : await enrichWithHouseholdProviders(ctx, result.items);
     const valid = enriched.filter((item) => eligibilityFailures(item, rules).length === 0);
     await cacheTmdbItems(ctx, valid, result.cachedUntil);
     return { source: 'TMDB' as const, items: valid.map((item) => ({ catalogKey: item.catalogKey, mediaType: item.mediaType, title: item.title, releaseYear: item.releaseYear, runtimeMinutes: item.runtimeMinutes!, contentRating: item.contentRating ?? 'Unrated', genres: item.genres, synopsis: item.synopsis, posterUrl: item.posterUrl, availability: item.availability, localAvailability: item.localAvailability, requestAvailability: item.requestAvailability })) };

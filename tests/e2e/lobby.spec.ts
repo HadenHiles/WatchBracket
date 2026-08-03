@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext } from "@playwright/test";
+import { settleForScreenshot } from "./visual";
 
 const captureDocs = process.env.CAPTURE_DOCS === "1";
 
@@ -22,9 +23,12 @@ test("host, guests, and an independent revocable display share a durable lobby",
 
   const host = await hostContext.newPage();
   await host.goto("/");
-  await expect(host.getByText("No account required.")).toBeVisible();
-  if (captureDocs) await host.screenshot({ path: "docs/assets/demo-home.png", fullPage: true });
-  await host.getByRole("button", { name: "Create a Room" }).click();
+  await expect(host.getByRole("heading", { name: "Tonight's pick, decided together." })).toBeVisible();
+  if (captureDocs) {
+    await settleForScreenshot(host);
+    await host.screenshot({ path: "docs/assets/demo-home.png", fullPage: true });
+  }
+  await host.getByRole("button", { name: "Create a room" }).click();
   await expect(host).toHaveURL(/\/room\//, { timeout: 15_000 });
   await expect(host.getByRole("status")).toContainText("connected");
   await expect(host.getByRole("button", { name: /Cast to TV/ })).toBeVisible();
@@ -36,7 +40,10 @@ test("host, guests, and an independent revocable display share a durable lobby",
   const guestC = await join(guestCContext, code, "Browser C");
   await expect(host.getByText("Browser B")).toBeVisible();
   await expect(host.getByText("Browser C")).toBeVisible();
-  if (captureDocs) await host.screenshot({ path: "docs/assets/demo-lobby.png", fullPage: true });
+  if (captureDocs) {
+    await settleForScreenshot(host);
+    await host.screenshot({ path: "docs/assets/demo-lobby.png", fullPage: true });
+  }
   await guestB.reload();
   await expect(host.getByText("Browser B")).toHaveCount(1);
 
@@ -44,11 +51,14 @@ test("host, guests, and an independent revocable display share a durable lobby",
   const pairing = (await host.locator("strong.room-code").textContent())!.trim();
   const display = await displayContext.newPage();
   await display.goto("/display");
-  await display.getByLabel("Pairing code").fill(pairing);
-  await display.getByRole("button", { name: "Connect display" }).click();
+  await display.getByLabel("TV code").fill(pairing);
+  await display.getByRole("button", { name: "Connect TV" }).click();
   await expect(display.getByText("Browser B")).toBeVisible();
   await expect(display.getByText("Browser C")).toBeVisible();
-  if (captureDocs) await display.screenshot({ path: "docs/assets/demo-display.png", fullPage: true });
+  if (captureDocs) {
+    await settleForScreenshot(display);
+    await display.screenshot({ path: "docs/assets/demo-display.png", fullPage: true });
+  }
 
   await host.goto("about:blank");
   await guestC.reload();

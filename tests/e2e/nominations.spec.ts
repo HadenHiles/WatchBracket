@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { settleForScreenshot } from './visual';
 
 const captureDocs = process.env.CAPTURE_DOCS === '1';
 
@@ -12,16 +13,13 @@ async function join(context: BrowserContext, code: string, nickname: string) {
 }
 
 async function makePicks(page: Page, query: string) {
-  await page.getByLabel('Find a title').fill(query);
+  await page.getByLabel('Search for a title').fill(query);
   const posters = page.locator('.poster-grid').last().locator('button.poster-choice');
   await expect(posters.first()).toBeVisible({ timeout: 15_000 });
   await expect.poll(() => posters.count()).toBeGreaterThan(1);
   await posters.nth(0).click();
-  await expect(posters.nth(0)).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: /^Pick 1:/ }).click();
+  await expect(page.getByRole('button', { name: /^Pick 1:(?! empty)/ })).toBeVisible();
   await posters.nth(1).click();
-  await expect(posters.nth(1)).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: /^Pick 2:/ }).click();
   await expect(page.getByRole('button', { name: /^Pick 2:(?! empty)/ })).toBeVisible();
   await page.getByRole('button', { name: 'Lock in both picks' }).click();
 }
@@ -34,18 +32,18 @@ test('nominations keep picks pinned and contenders private by default', async ({
   const guestThreeContext = await browser.newContext();
   const host = await hostContext.newPage();
   await host.goto('/');
-  await host.getByRole('button', { name: 'Create a Room' }).click();
+  await host.getByRole('button', { name: 'Create a room' }).click();
   const code = (await host.locator('.room-code').first().textContent())!.trim();
   const guest = await join(guestContext, code, 'Private Picker');
   const guestTwo = await join(guestTwoContext, code, 'Tape Rewinder');
   const guestThree = await join(guestThreeContext, code, 'Snack Runner');
   const voters = [host, guest, guestTwo, guestThree];
 
-  await host.getByRole('button', { name: 'Start nomination timer' }).click();
+  await host.getByRole('button', { name: 'Start picking' }).click();
   await expect(host.locator('.nomination-dock')).toBeVisible();
   await expect(guest.locator('.nomination-dock')).toBeVisible();
-  await expect(host.getByRole('button', { name: 'Connect my Plex' })).toBeVisible();
-  await expect(guest.getByRole('button', { name: 'Connect my Plex' })).toBeVisible();
+  await expect(host.getByRole('button', { name: /Connect my Plex/ })).toBeVisible();
+  await expect(guest.getByRole('button', { name: /Connect my Plex/ })).toBeVisible();
 
   await Promise.all([
     makePicks(host, 'Dune'),
@@ -53,7 +51,11 @@ test('nominations keep picks pinned and contenders private by default', async ({
     makePicks(guestTwo, 'The Matrix'),
     makePicks(guestThree, 'Alien'),
   ]);
-  if (captureDocs) await host.screenshot({ path: 'docs/assets/demo-nominations.png', fullPage: true });
+  if (captureDocs) {
+    await settleForScreenshot(host);
+    await host.screenshot({ path: 'docs/assets/demo-nominations.png', fullPage: true });
+  }
+  await host.getByRole('button', { name: 'Edit picks' }).click();
   await host.getByRole('button', { name: 'Reveal now' }).click();
 
   await expect(host.getByRole('heading', { name: 'Keep the lineup a surprise' })).toBeVisible();
@@ -64,21 +66,24 @@ test('nominations keep picks pinned and contenders private by default', async ({
   await expect(host.locator('.contender-preview')).toBeVisible();
 
   await host.getByRole('button', { name: 'Build bracket and begin' }).click();
-  await expect(host.getByText('Matchup incoming. Voting opens when the intro completes.')).toBeVisible({ timeout: 15_000 });
+  await expect(host.getByText(/Voting opens in/)).toBeVisible({ timeout: 15_000 });
   await host.getByRole('button', { name: 'Skip presentation' }).click();
-  await expect(host.getByText('Tap a poster, then lock it in.')).toBeVisible();
-  await expect(guest.getByText('Tap a poster, then lock it in.')).toBeVisible();
-  if (captureDocs) await host.screenshot({ path: 'docs/assets/demo-voting.png', fullPage: true });
+  await expect(host.getByRole('button', { name: 'Choose a poster' })).toBeVisible();
+  await expect(guest.getByRole('button', { name: 'Choose a poster' })).toBeVisible();
+  if (captureDocs) {
+    await settleForScreenshot(host);
+    await host.screenshot({ path: 'docs/assets/demo-voting.png', fullPage: true });
+  }
 
   for (let matchup = 1; matchup <= 9; matchup += 1) {
     await Promise.all(voters.map((voter) => voter.locator('button.matchup-poster-option').first().click()));
-    await Promise.all(voters.map((voter) => voter.getByRole('button', { name: 'Lock in pick' }).click()));
+    await Promise.all(voters.map((voter) => voter.getByRole('button', { name: /Vote for/ }).click()));
     await expect(host.getByText('advances')).toBeVisible({ timeout: 5_000 });
     await host.getByRole('button', { name: 'Skip presentation' }).click();
     if (matchup === 9) break;
-    await expect(host.getByText('Matchup incoming. Voting opens when the intro completes.')).toBeVisible();
+    await expect(host.getByText(/Voting opens in/)).toBeVisible();
     await host.getByRole('button', { name: 'Skip presentation' }).click();
-    await expect(host.getByText('Tap a poster, then lock it in.')).toBeVisible();
+    await expect(host.getByRole('button', { name: 'Choose a poster' })).toBeVisible();
     await host.waitForTimeout(750);
   }
 
@@ -87,7 +92,7 @@ test('nominations keep picks pinned and contenders private by default', async ({
   await expect(host.locator('.controller-confetti i')).toHaveCount(32);
   await expect(host.getByRole('link', { name: /Watch now on Plex|Open in Jellyseerr to request/ })).toBeVisible();
   if (captureDocs) {
-    await host.waitForTimeout(1_200);
+    await settleForScreenshot(host);
     await host.screenshot({ path: 'docs/assets/demo-winner.png', fullPage: true });
   }
 

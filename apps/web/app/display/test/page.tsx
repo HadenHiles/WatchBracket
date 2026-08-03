@@ -30,6 +30,11 @@ const candidateB = {
 };
 function fixture(mode: string): DisplayScene {
   const deadline = new Date(Date.now() + 83_000).toISOString();
+  const roomIdentity = {
+    roomName: "Friday Movie Night",
+    roomCode: "7K9MQR",
+    joinUrl: "https://bracket.famflix.live/join/7K9MQR",
+  };
   if (mode === "nominations")
     return {
       type: "NOMINATION_PROGRESS",
@@ -45,7 +50,7 @@ function fixture(mode: string): DisplayScene {
   if (mode === "intro")
     return {
       type: "MATCHUP_INTRO",
-      roomName: "Friday Movie Night",
+      ...roomIdentity,
       stage: "REDEMPTION",
       matchupNumber: 7,
       totalMatchups: 9,
@@ -56,7 +61,7 @@ function fixture(mode: string): DisplayScene {
   if (mode === "voting")
     return {
       type: "MATCHUP_VOTING",
-      roomName: "Friday Movie Night",
+      ...roomIdentity,
       stage: "REDEMPTION",
       matchupNumber: 7,
       totalMatchups: 9,
@@ -69,7 +74,7 @@ function fixture(mode: string): DisplayScene {
   if (mode === "result")
     return {
       type: "MATCHUP_RESULT",
-      roomName: "Friday Movie Night",
+      ...roomIdentity,
       stage: "REDEMPTION",
       matchupNumber: 7,
       totalMatchups: 9,
@@ -84,7 +89,7 @@ function fixture(mode: string): DisplayScene {
   if (mode === "winner")
     return {
       type: "WINNER",
-      roomName: "Friday Movie Night",
+      ...roomIdentity,
       winner: { ...candidateB, strikes: 1 },
       podium: [
         { ...candidateB, strikes: 1, placement: 1 },

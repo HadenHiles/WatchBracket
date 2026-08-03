@@ -92,9 +92,14 @@ const TournamentStageSceneSchema = z.enum([
   "CHAMPIONSHIP_SEMI",
   "CHAMPIONSHIP_FINAL",
 ]);
+const RoomIdentityFields = {
+  roomName: z.string(),
+  roomCode: z.string(),
+  joinUrl: z.url(),
+};
 export const MatchupIntroSceneSchema = z.object({
   type: z.literal("MATCHUP_INTRO"),
-  roomName: z.string(),
+  ...RoomIdentityFields,
   stage: TournamentStageSceneSchema,
   matchupNumber: z.number().int().positive(),
   totalMatchups: z.number().int().positive(),
@@ -104,7 +109,7 @@ export const MatchupIntroSceneSchema = z.object({
 });
 export const MatchupVotingSceneSchema = z.object({
   type: z.literal("MATCHUP_VOTING"),
-  roomName: z.string(),
+  ...RoomIdentityFields,
   stage: TournamentStageSceneSchema,
   matchupNumber: z.number().int().positive(),
   totalMatchups: z.number().int().positive(),
@@ -116,7 +121,7 @@ export const MatchupVotingSceneSchema = z.object({
 });
 export const MatchupResultSceneSchema = z.object({
   type: z.literal("MATCHUP_RESULT"),
-  roomName: z.string(),
+  ...RoomIdentityFields,
   stage: TournamentStageSceneSchema,
   matchupNumber: z.number().int().positive(),
   totalMatchups: z.number().int().positive(),
@@ -130,7 +135,7 @@ export const MatchupResultSceneSchema = z.object({
 });
 export const WinnerSceneSchema = z.object({
   type: z.literal("WINNER"),
-  roomName: z.string(),
+  ...RoomIdentityFields,
   winner: TournamentCandidateSceneSchema,
   podium: z.array(TournamentCandidateSceneSchema.extend({
     placement: z.union([z.literal(1), z.literal(2), z.literal(3)]),

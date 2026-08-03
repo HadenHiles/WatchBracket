@@ -60,6 +60,8 @@ describe("Cast launch protocol", () => {
       DisplaySceneSchema.safeParse({
         type: "MATCHUP_INTRO",
         roomName: "Friday",
+        roomCode: "ABC123",
+        joinUrl: "https://example.test/join/ABC123",
         stage: "REDEMPTION",
         matchupNumber: 7,
         totalMatchups: 9,
@@ -72,6 +74,8 @@ describe("Cast launch protocol", () => {
       DisplaySceneSchema.safeParse({
         type: "MATCHUP_VOTING",
         roomName: "Friday",
+        roomCode: "ABC123",
+        joinUrl: "https://example.test/join/ABC123",
         stage: "REDEMPTION",
         matchupNumber: 7,
         totalMatchups: 9,
@@ -86,6 +90,8 @@ describe("Cast launch protocol", () => {
       DisplaySceneSchema.safeParse({
         type: "MATCHUP_RESULT",
         roomName: "Friday",
+        roomCode: "ABC123",
+        joinUrl: "https://example.test/join/ABC123",
         stage: "REDEMPTION",
         matchupNumber: 7,
         totalMatchups: 9,
@@ -102,6 +108,8 @@ describe("Cast launch protocol", () => {
       DisplaySceneSchema.safeParse({
         type: "WINNER",
         roomName: "Friday",
+        roomCode: "ABC123",
+        joinUrl: "https://example.test/join/ABC123",
         winner: candidateB,
         podium: [
           { ...candidateB, placement: 1 },

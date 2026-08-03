@@ -284,6 +284,8 @@ export function toDisplayScene(
     return {
       type: "WINNER",
       roomName: snapshot.name,
+      roomCode: snapshot.code,
+      joinUrl: `${publicAppUrl}/join/${snapshot.code}`,
       winner: sceneCandidate(champion),
       podium: tournament.podium.map((item) => ({
         ...sceneCandidate(item),
@@ -308,6 +310,8 @@ export function toDisplayScene(
     );
   const base = {
     roomName: snapshot.name,
+    roomCode: snapshot.code,
+    joinUrl: `${publicAppUrl}/join/${snapshot.code}`,
     stage: matchup.stage,
     matchupNumber: matchup.sequence,
     totalMatchups: tournament.totalMatchups,

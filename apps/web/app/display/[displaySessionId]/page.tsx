@@ -72,6 +72,8 @@ function sceneFromSnapshot(value: unknown): DisplayScene {
     return {
       type: "WINNER",
       roomName: snapshot.name,
+      roomCode: snapshot.code,
+      joinUrl: `${window.location.origin}/join/${snapshot.code}`,
       winner: candidate(tournament.champion),
       podium: tournament.podium.map((item) => ({
         ...candidate(item),
@@ -90,6 +92,8 @@ function sceneFromSnapshot(value: unknown): DisplayScene {
   if (!matchup) throw new Error("Matchup unavailable");
   const base = {
     roomName: snapshot.name,
+    roomCode: snapshot.code,
+    joinUrl: `${window.location.origin}/join/${snapshot.code}`,
     stage: matchup.stage,
     matchupNumber: matchup.sequence,
     totalMatchups: tournament.totalMatchups,
@@ -119,6 +123,8 @@ function sceneFromSnapshot(value: unknown): DisplayScene {
   return {
     type: "MATCHUP_RESULT",
     roomName: snapshot.name,
+    roomCode: snapshot.code,
+    joinUrl: `${window.location.origin}/join/${snapshot.code}`,
     stage: matchup.stage,
     matchupNumber: matchup.sequence,
     totalMatchups: tournament.totalMatchups,

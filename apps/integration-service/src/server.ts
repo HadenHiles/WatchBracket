@@ -1,10 +1,13 @@
 import Fastify from 'fastify';
 import { IntegrationEnvSchema, parseEnv } from '@watch-bracket/config';
+import { createDatabase } from '@watch-bracket/db';
 import { ProviderOperationSchema, type ProviderError } from '@watch-bracket/provider-contracts';
 import { TmdbProvider, TmdbProviderError, tmdbMetadataTtlMs } from './tmdb.js';
 import { IntegrationProviderError, PlexProvider, SeerrProvider, TautulliProvider } from './integrations.js';
+import { ParticipantPlexAccounts } from './plex-account.js';
 
 const env = parseEnv(IntegrationEnvSchema, process.env);
+const database = createDatabase(env.DATABASE_URL, { max: 3 });
 const app = Fastify({ logger: { redact: ['req.headers.authorization', 'req.headers.x-integration-secret'] }, bodyLimit: 32 * 1024 });
 const configured = (value?: string) => Boolean(value && !value.toLowerCase().includes('replace-me'));
 const authorized = (request: { headers: Record<string, unknown> }) => request.headers['x-integration-secret'] === env.INTEGRATION_SERVICE_SHARED_SECRET;
@@ -12,6 +15,7 @@ const tmdb = new TmdbProvider(env.TMDB_API_READ_TOKEN);
 const plex = new PlexProvider(env.PLEX_BASE_URL, env.PLEX_TOKEN);
 const tautulli = new TautulliProvider(env.TAUTULLI_BASE_URL, env.TAUTULLI_API_KEY);
 const seerr = new SeerrProvider(env.SEERR_BASE_URL, env.SEERR_API_KEY);
+const participantPlex = new ParticipantPlexAccounts(database.db, env.INTEGRATION_SERVICE_SHARED_SECRET);
 app.get('/internal/health/live', async () => ({ status: 'ok' }));
 app.get('/internal/health/ready', async () => ({ status: 'ready' }));
 app.get('/internal/setup/status', async (request, reply) => {
@@ -42,6 +46,16 @@ app.post('/internal/providers/operation', async (request, reply) => {
       await provider.health(); return { ok: true, provider: parsed.data.provider, operation: 'HEALTH', healthy: true, circuit: provider.circuit };
     }
     if (parsed.data.operation === 'PLEX_INVENTORY') return { ok: true, provider: 'PLEX', operation: 'PLEX_INVENTORY', ...await plex.inventory(parsed.data.input.libraryIds) };
+    if (parsed.data.operation === 'PLEX_AUTH_START') return { ok: true, provider: 'PLEX', operation: 'PLEX_AUTH_START', ...await participantPlex.start(parsed.data.input.participantId, parsed.data.input.forwardUrl) };
+    if (parsed.data.operation === 'PLEX_AUTH_STATUS') return { ok: true, provider: 'PLEX', operation: 'PLEX_AUTH_STATUS', ...await participantPlex.status(parsed.data.input.participantId) };
+    if (parsed.data.operation === 'PLEX_WATCHLIST') {
+      const input = parsed.data.input;
+      const references = await participantPlex.watchlist(input.participantId, input.limit);
+      const items = (await Promise.allSettled(references.map((item) => tmdb.details(item.mediaType, item.tmdbId, input.region, input.language))))
+        .flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
+      return { ok: true, provider: 'PLEX', operation: 'PLEX_WATCHLIST', items, refreshedAt: new Date().toISOString() };
+    }
+    if (parsed.data.operation === 'PLEX_UNLINK') return { ok: true, provider: 'PLEX', operation: 'PLEX_UNLINK', ...await participantPlex.unlink(parsed.data.input.participantId) };
     if (parsed.data.operation === 'TAUTULLI_HISTORY') return { ok: true, provider: 'TAUTULLI', operation: 'TAUTULLI_HISTORY', ...await tautulli.history(parsed.data.input.limit) };
     if (parsed.data.operation === 'SEERR_STATUS') return { ok: true, provider: 'SEERR', operation: 'SEERR_STATUS', items: await seerr.statuses(parsed.data.input.items) };
     return { ok: true, provider: 'SEERR', operation: 'SEERR_REQUEST', ...await seerr.request(parsed.data.input) };
@@ -54,6 +68,6 @@ app.post('/internal/providers/operation', async (request, reply) => {
 const inventoryTimer = setInterval(() => { if (plex.configured) void plex.inventory(undefined, true).catch((error) => app.log.warn({ err: error }, 'scheduled Plex inventory refresh failed')); }, 30 * 60_000);
 inventoryTimer.unref();
 if (plex.configured) void plex.inventory(undefined, true).catch((error) => app.log.warn({ err: error }, 'initial Plex inventory refresh failed'));
-const close = async () => { await app.close(); process.exit(0); };
+const close = async () => { await app.close(); await database.client.end(); process.exit(0); };
 process.once('SIGINT', () => void close()); process.once('SIGTERM', () => void close());
 await app.listen({ host: '0.0.0.0', port: env.PORT });

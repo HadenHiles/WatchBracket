@@ -64,6 +64,35 @@ function CastGlyph() {
   );
 }
 
+function playRoomCue(state: RoomSnapshot["state"]) {
+  const AudioContextClass = window.AudioContext;
+  const audio = new AudioContextClass();
+  const notes =
+    state === "MATCHUP_INTRO"
+      ? [147, 220]
+      : state === "VOTING"
+        ? [330, 494]
+        : state === "MATCHUP_RESULT"
+          ? [220, 440]
+          : state === "WINNER"
+            ? [392, 523, 659, 784]
+            : [];
+  notes.forEach((frequency, index) => {
+    const oscillator = audio.createOscillator();
+    const gain = audio.createGain();
+    const startsAt = audio.currentTime + index * 0.11;
+    oscillator.type = state === "MATCHUP_INTRO" ? "sawtooth" : "square";
+    oscillator.frequency.setValueAtTime(frequency, startsAt);
+    gain.gain.setValueAtTime(0.0001, startsAt);
+    gain.gain.exponentialRampToValueAtTime(0.035, startsAt + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startsAt + 0.16);
+    oscillator.connect(gain).connect(audio.destination);
+    oscillator.start(startsAt);
+    oscillator.stop(startsAt + 0.17);
+  });
+  window.setTimeout(() => void audio.close(), 900);
+}
+
 export default function RoomPage() {
   const { roomId } = useParams<{ roomId: string }>();
   const router = useRouter();
@@ -78,6 +107,11 @@ export default function RoomPage() {
   const [selectedItem, setSelectedItem] = useState<CatalogItem>();
   const [catalogSource, setCatalogSource] = useState<"TMDB" | "MOCK">();
   const [catalogWarning, setCatalogWarning] = useState("");
+  const [plexConnected, setPlexConnected] = useState(false);
+  const [plexAccountLabel, setPlexAccountLabel] = useState<string>();
+  const [plexWatchlist, setPlexWatchlist] = useState<CatalogItem[]>([]);
+  const [plexPending, setPlexPending] = useState(false);
+  const [plexMessage, setPlexMessage] = useState("");
   const [searching, setSearching] = useState(false);
   const [rules, setRules] = useState<HouseRules>(presets.MOVIE_NIGHT);
   const [format, setFormat] = useState<8 | 12 | 16>(8);
@@ -89,6 +123,8 @@ export default function RoomPage() {
   const [effectsEnabled, setEffectsEnabled] = useState(false);
   const previousState = useRef<RoomSnapshot["state"] | undefined>(undefined);
   const searchRequest = useRef(0);
+  const plexPollTimer = useRef<number | undefined>(undefined);
+  const plexStatusChecked = useRef(false);
   const sequence = useRef(0);
   const load = useCallback(async () => {
     try {
@@ -152,10 +188,19 @@ export default function RoomPage() {
     if (snapshot.state === "VOTING") navigator.vibrate?.(25);
     if (snapshot.state === "MATCHUP_RESULT") navigator.vibrate?.([35, 45, 35]);
     if (snapshot.state === "WINNER") navigator.vibrate?.([60, 50, 90]);
-    if (["VOTING", "MATCHUP_RESULT", "WINNER"].includes(snapshot.state)) {
-      try { const audio = new AudioContext(); const oscillator = audio.createOscillator(); const gain = audio.createGain(); oscillator.frequency.value = snapshot.state === "WINNER" ? 660 : snapshot.state === "MATCHUP_RESULT" ? 440 : 330; gain.gain.setValueAtTime(.035, audio.currentTime); gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .16); oscillator.connect(gain).connect(audio.destination); oscillator.start(); oscillator.stop(audio.currentTime + .17); oscillator.addEventListener("ended",()=>void audio.close()); } catch { /* optional feedback */ }
-    }
+    if (["MATCHUP_INTRO", "VOTING", "MATCHUP_RESULT", "WINNER"].includes(snapshot.state))
+      try { playRoomCue(snapshot.state); } catch { /* optional feedback */ }
   }, [snapshot, effectsEnabled]);
+  useEffect(() => () => {
+    if (plexPollTimer.current) window.clearInterval(plexPollTimer.current);
+  }, []);
+  useEffect(() => {
+    if (snapshot?.state !== "NOMINATING" || plexStatusChecked.current) return;
+    plexStatusChecked.current = true;
+    void checkPlexStatus().catch(() => {
+      setPlexMessage("Plex quick suggestions are optional.");
+    });
+  }, [snapshot?.state]);
   const joinUrl = useMemo(
     () => (snapshot ? `${window.location.origin}/join/${snapshot.code}` : ""),
     [snapshot],
@@ -270,6 +315,66 @@ export default function RoomPage() {
       })
     )
       setSelectedItem(undefined);
+  }
+  async function loadPlexWatchlist() {
+    const response = await api<{ items: CatalogItem[] }>(
+      "/api/catalog/plex-watchlist",
+    );
+    setPlexWatchlist(response.items);
+    setPlexMessage(
+      response.items.length
+        ? `${response.items.length} quick suggestions loaded`
+        : "Your Plex watchlist has no eligible titles for these house rules.",
+    );
+  }
+  async function checkPlexStatus(loadSuggestions = true) {
+    const status = await api<{ connected: boolean; accountLabel: string | null }>(
+      "/api/plex/status",
+    );
+    setPlexConnected(status.connected);
+    setPlexAccountLabel(status.accountLabel ?? undefined);
+    if (status.connected && loadSuggestions) await loadPlexWatchlist();
+    return status.connected;
+  }
+  async function connectPlex() {
+    setPlexPending(true);
+    setPlexMessage("Opening Plex sign-in…");
+    const popup = window.open("about:blank", "watch-bracket-plex", "popup,width=520,height=720");
+    try {
+      const auth = await api<{ authUrl: string; expiresAt: string }>(
+        "/api/plex/auth/start",
+        { method: "POST", body: "{}" },
+      );
+      if (popup) popup.location.href = auth.authUrl;
+      else window.location.href = auth.authUrl;
+      setPlexMessage("Finish signing in with Plex; this page will update automatically.");
+      if (plexPollTimer.current) window.clearInterval(plexPollTimer.current);
+      plexPollTimer.current = window.setInterval(() => {
+        void checkPlexStatus().then((connected) => {
+          if (!connected) return;
+          if (plexPollTimer.current) window.clearInterval(plexPollTimer.current);
+          plexPollTimer.current = undefined;
+          setPlexPending(false);
+          setPlexMessage("Plex watchlist connected.");
+          popup?.close();
+        }).catch(() => undefined);
+      }, 1500);
+    } catch (reason) {
+      popup?.close();
+      setPlexPending(false);
+      setPlexMessage(reason instanceof Error ? reason.message : "Could not connect Plex.");
+    }
+  }
+  async function disconnectPlex() {
+    try {
+      await api("/api/plex/auth", { method: "DELETE" });
+      setPlexConnected(false);
+      setPlexAccountLabel(undefined);
+      setPlexWatchlist([]);
+      setPlexMessage("Plex disconnected from this room profile.");
+    } catch (reason) {
+      setPlexMessage(reason instanceof Error ? reason.message : "Could not disconnect Plex.");
+    }
   }
   if (!snapshot)
     return (
@@ -607,6 +712,70 @@ export default function RoomPage() {
             >
               {snapshot.viewerReady ? "Edit picks" : "Lock in both picks"}
             </button>
+          </section>
+          <section className="card stack plex-suggestions">
+            <div className="actions spread">
+              <span>
+                <span className="brand">Quick picks</span>
+                <h2>Your Plex watchlist</h2>
+              </span>
+              {plexConnected && (
+                <small className="muted">{plexAccountLabel ?? "Connected"}</small>
+              )}
+            </div>
+            {!plexConnected ? (
+              <div className="plex-connect-row">
+                <p className="muted">
+                  Optionally connect your own Plex account to turn your watchlist
+                  into one-tap suggestions. This does not affect anyone else in
+                  the room.
+                </p>
+                <button disabled={plexPending} onClick={() => void connectPlex()}>
+                  {plexPending ? "Waiting for Plex…" : "Connect my Plex"}
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="poster-grid">
+                  {plexWatchlist.map((item) => (
+                    <button
+                      type="button"
+                      className={`poster-choice ${selectedItem?.catalogKey === item.catalogKey ? "selected" : ""}`}
+                      key={item.catalogKey}
+                      aria-pressed={selectedItem?.catalogKey === item.catalogKey}
+                      aria-label={`Choose ${item.title} from your Plex watchlist`}
+                      disabled={snapshot.viewerReady}
+                      draggable={!snapshot.viewerReady}
+                      onClick={() => setSelectedItem(item)}
+                      onDragStart={(event) => {
+                        setSelectedItem(item);
+                        event.dataTransfer.effectAllowed = "copy";
+                        event.dataTransfer.setData(
+                          "application/watch-bracket-catalog-key",
+                          item.catalogKey,
+                        );
+                      }}
+                    >
+                      {item.posterUrl ? (
+                        <img src={item.posterUrl} alt="" loading="lazy" />
+                      ) : (
+                        <span className="poster-placeholder" aria-hidden="true">WB</span>
+                      )}
+                      <strong>{item.title}</strong>
+                    </button>
+                  ))}
+                </div>
+                <div className="actions">
+                  <button className="secondary" onClick={() => void loadPlexWatchlist()}>
+                    Refresh watchlist
+                  </button>
+                  <button className="text-button" onClick={() => void disconnectPlex()}>
+                    Disconnect Plex
+                  </button>
+                </div>
+              </>
+            )}
+            {plexMessage && <p className="search-state" role="status">{plexMessage}</p>}
           </section>
           <section className="card stack">
             <div>

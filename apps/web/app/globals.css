@@ -100,6 +100,10 @@ button.pick-slot.ready { border-color: var(--accent); animation: pick-slot-pulse
 .pick-slot strong { min-width: 0; overflow: hidden; font-size: .82rem; line-height: 1.15; text-overflow: ellipsis; }
 .empty-pick { grid-column: 1 / -1; color: var(--muted); font-size: .7rem; line-height: 1.2; }
 .search-state { min-height: 1.2rem; color: var(--cyan); font-size: .78rem; }
+.plex-suggestions { border-color: #e5a8ff; background: radial-gradient(circle at 92% 0, #c55cff24, transparent 38%), linear-gradient(160deg, #0c3a8ee8, #061d52ed); }
+.plex-suggestions h2 { margin: .65rem 0 0; }
+.plex-connect-row { display: grid; gap: .75rem; }
+.plex-connect-row p { margin: 0; }
 .poster-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
 button.poster-choice { min-width: 0; min-height: 0; display: grid; align-content: start; gap: .5rem; padding: .45rem; border: 2px solid #4e79c8; background: #031847; color: var(--ink); text-align: left; text-transform: none; box-shadow: 4px 4px 0 #020a25; }
 button.poster-choice:hover { transform: translateY(-2px); border-color: var(--cyan); }

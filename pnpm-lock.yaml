@@ -161,9 +161,15 @@ importers:
       '@watch-bracket/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@watch-bracket/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@watch-bracket/provider-contracts':
         specifier: workspace:*
         version: link:../../packages/provider-contracts
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(postgres@3.4.9)
       fastify:
         specifier: 5.11.0
         version: 5.11.0

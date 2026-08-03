@@ -51,6 +51,7 @@ import {
   closeNominations,
   extendNominations,
   searchCatalog,
+  plexWatchlistSuggestions,
   seedMockCatalog,
   setNominationsReady,
   startNominations,
@@ -65,7 +66,12 @@ import {
   submitVote,
 } from "./tournament.js";
 import { getRecommendationDebug } from "./recommendations.js";
-import { requestFromSeerr } from "./providers.js";
+import {
+  getPlexAuthStatus,
+  requestFromSeerr,
+  startPlexAuth,
+  unlinkPlex,
+} from "./providers.js";
 import { clearHouseholdHistory } from "./history.js";
 import { runItBack } from "./replay.js";
 
@@ -510,6 +516,68 @@ export async function buildApp(env: GameApiEnv) {
       query.mediaType,
       query.autocomplete,
     );
+  });
+  app.get("/api/plex/status", async (request) => {
+    const participant = await resolveParticipant(
+      context,
+      request.cookies[COOKIE.participant],
+    );
+    if (!participant)
+      throw new DomainError(
+        "ROOM_SESSION_REQUIRED",
+        "Join a room before connecting Plex.",
+        401,
+      );
+    return getPlexAuthStatus(context, participant.id);
+  });
+  app.post("/api/plex/auth/start", async (request) => {
+    await mutationGuard(request);
+    const participant = await resolveParticipant(
+      context,
+      request.cookies[COOKIE.participant],
+    );
+    if (!participant)
+      throw new DomainError(
+        "ROOM_SESSION_REQUIRED",
+        "Join a room before connecting Plex.",
+        401,
+      );
+    const forwardUrl = new URL(
+      `/room/${participant.roomId}?plex=return`,
+      env.PUBLIC_APP_URL,
+    ).toString();
+    return startPlexAuth(context, participant.id, forwardUrl);
+  });
+  app.get("/api/catalog/plex-watchlist", async (request) => {
+    const participant = await resolveParticipant(
+      context,
+      request.cookies[COOKIE.participant],
+    );
+    if (!participant)
+      throw new DomainError(
+        "ROOM_SESSION_REQUIRED",
+        "Join a room before loading a Plex watchlist.",
+        401,
+      );
+    return plexWatchlistSuggestions(
+      context,
+      participant.roomId,
+      participant.id,
+    );
+  });
+  app.delete("/api/plex/auth", async (request) => {
+    await mutationGuard(request);
+    const participant = await resolveParticipant(
+      context,
+      request.cookies[COOKIE.participant],
+    );
+    if (!participant)
+      throw new DomainError(
+        "ROOM_SESSION_REQUIRED",
+        "Join a room before disconnecting Plex.",
+        401,
+      );
+    return unlinkPlex(context, participant.id);
   });
   app.post("/api/rooms/:roomId/nominations/start", async (request) => {
     await mutationGuard(request);

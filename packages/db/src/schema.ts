@@ -96,6 +96,18 @@ export const participants = pgTable('participants', {
   index('participants_room_idx').on(table.roomId)
 ]);
 
+export const participantPlexAccounts = pgTable('participant_plex_accounts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  participantId: uuid('participant_id').notNull().references(() => participants.id, { onDelete: 'cascade' }),
+  plexPinId: text('plex_pin_id'),
+  plexPinCode: text('plex_pin_code'),
+  pinExpiresAt: timestamp('pin_expires_at', { withTimezone: true }),
+  encryptedToken: text('encrypted_token'),
+  accountLabel: text('account_label'),
+  connectedAt: timestamp('connected_at', { withTimezone: true }),
+  ...timestamps
+}, (table) => [uniqueIndex('participant_plex_accounts_participant_uq').on(table.participantId)]);
+
 export const displayPairingCodes = pgTable('display_pairing_codes', {
   id: uuid('id').primaryKey().defaultRandom(),
   roomId: uuid('room_id').notNull().references(() => rooms.id, { onDelete: 'cascade' }),

@@ -6,7 +6,7 @@ import type { CanonicalMediaItem } from '@watch-bracket/provider-contracts';
 import { HouseRulesSchema, type HouseRules } from '@watch-bracket/realtime-protocol';
 import type { DomainContext } from './domain.js';
 import { DomainError, requireRoomHost } from './domain.js';
-import { enrichWithHouseholdProviders, searchTmdb } from './providers.js';
+import { enrichWithHouseholdProviders, getPlexWatchlist, searchTmdb } from './providers.js';
 import { eligibilityFailures } from './eligibility.js';
 
 export const HOUSE_RULE_PRESETS: Record<HouseRules['preset'], HouseRules> = {
@@ -55,6 +55,19 @@ export async function searchCatalog(ctx: DomainContext, roomId: string, query: s
     if (ctx.env.NODE_ENV === 'production') throw error;
     return { source: 'MOCK' as const, warning: 'TMDB is unavailable; using the deterministic development catalog.', items: searchMockCatalog(query, mediaType).filter((item)=>eligibilityFailures(item,rules).length===0) };
   }
+}
+
+export async function plexWatchlistSuggestions(ctx: DomainContext, roomId: string, participantId: string) {
+  const [room] = await ctx.db.select({ rules: rooms.rules, householdId: rooms.householdId }).from(rooms).where(eq(rooms.id, roomId)).limit(1);
+  if (!room) throw new DomainError('ROOM_NOT_FOUND', 'Room not found.', 404);
+  const [household] = await ctx.db.select({ region: households.region }).from(households).where(eq(households.id, room.householdId)).limit(1);
+  const rules = HouseRulesSchema.parse(room.rules);
+  const result = await getPlexWatchlist(ctx, participantId, household?.region ?? 'CA');
+  const enriched = await enrichWithHouseholdProviders(ctx, result.items);
+  const valid = enriched.filter((item) => eligibilityFailures(item, rules).length === 0);
+  const cachedUntil = new Date(Date.now() + 6 * 60 * 60_000).toISOString();
+  await cacheTmdbItems(ctx, valid, cachedUntil, roomId);
+  return { source: 'PLEX' as const, items: valid.map((item) => ({ catalogKey: item.catalogKey, mediaType: item.mediaType, title: item.title, releaseYear: item.releaseYear, runtimeMinutes: item.runtimeMinutes!, contentRating: item.contentRating ?? 'Unrated', genres: item.genres, synopsis: item.synopsis, posterUrl: item.posterUrl, availability: item.availability, localAvailability: item.localAvailability, requestAvailability: item.requestAvailability })) };
 }
 
 export async function startNominations(ctx: DomainContext, participantId: string, roomId: string, input: HouseRules) {

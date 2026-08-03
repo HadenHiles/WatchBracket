@@ -61,7 +61,7 @@ export class TmdbProvider {
     throw new TmdbProviderError('UPSTREAM_ERROR', 'TMDB is temporarily unavailable.');
   }
 
-  private async details(mediaType: MediaType, id: number, region: string, language: string): Promise<CanonicalMediaItem> {
+  async details(mediaType: MediaType, id: number, region: string, language: string): Promise<CanonicalMediaItem> {
     const pathType = mediaType === 'MOVIE' ? 'movie' : 'tv';
     const raw = await this.request(`/${pathType}/${id}`, { language, append_to_response: mediaType === 'MOVIE' ? 'release_dates,watch/providers' : 'content_ratings,watch/providers' });
     const parsed = DetailsSchema.safeParse(raw);

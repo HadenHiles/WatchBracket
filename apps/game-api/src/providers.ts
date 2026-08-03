@@ -1,4 +1,4 @@
-import { PlexInventoryResultSchema, SeerrRequestResultSchema, SeerrStatusResultSchema, TautulliHistoryResultSchema, TmdbRecommendationsResultSchema, TmdbSearchResultSchema, type CanonicalMediaItem, type ProviderOperation, type RecommendationCandidate } from '@watch-bracket/provider-contracts';
+import { PlexAuthStartResultSchema, PlexAuthStatusResultSchema, PlexInventoryResultSchema, PlexUnlinkResultSchema, PlexWatchlistResultSchema, SeerrRequestResultSchema, SeerrStatusResultSchema, TautulliHistoryResultSchema, TmdbRecommendationsResultSchema, TmdbSearchResultSchema, type CanonicalMediaItem, type ProviderOperation, type RecommendationCandidate } from '@watch-bracket/provider-contracts';
 import type { DomainContext } from './domain.js';
 import { DomainError } from './domain.js';
 
@@ -63,5 +63,33 @@ export async function requestFromSeerr(ctx: DomainContext, input: { tmdbId: numb
   const payload = await operation(ctx, { provider: 'SEERR', operation: 'SEERR_REQUEST', input });
   const parsed = SeerrRequestResultSchema.safeParse(payload);
   if (!parsed.success) throw new DomainError('SEERR_INVALID_RESPONSE', 'The request service returned an invalid response.', 502);
+  return parsed.data;
+}
+
+export async function startPlexAuth(ctx: DomainContext, participantId: string, forwardUrl: string) {
+  const payload = await operation(ctx, { provider: 'PLEX', operation: 'PLEX_AUTH_START', input: { participantId, forwardUrl } });
+  const parsed = PlexAuthStartResultSchema.safeParse(payload);
+  if (!parsed.success) throw new DomainError('PLEX_INVALID_RESPONSE', 'Plex returned an invalid sign-in response.', 502);
+  return parsed.data;
+}
+
+export async function getPlexAuthStatus(ctx: DomainContext, participantId: string) {
+  const payload = await operation(ctx, { provider: 'PLEX', operation: 'PLEX_AUTH_STATUS', input: { participantId } });
+  const parsed = PlexAuthStatusResultSchema.safeParse(payload);
+  if (!parsed.success) throw new DomainError('PLEX_INVALID_RESPONSE', 'Plex returned an invalid account response.', 502);
+  return parsed.data;
+}
+
+export async function getPlexWatchlist(ctx: DomainContext, participantId: string, region = 'CA') {
+  const payload = await operation(ctx, { provider: 'PLEX', operation: 'PLEX_WATCHLIST', input: { participantId, region, language: `en-${region}`, limit: 16 } });
+  const parsed = PlexWatchlistResultSchema.safeParse(payload);
+  if (!parsed.success) throw new DomainError('PLEX_INVALID_RESPONSE', 'Plex returned an invalid watchlist.', 502);
+  return parsed.data;
+}
+
+export async function unlinkPlex(ctx: DomainContext, participantId: string) {
+  const payload = await operation(ctx, { provider: 'PLEX', operation: 'PLEX_UNLINK', input: { participantId } });
+  const parsed = PlexUnlinkResultSchema.safeParse(payload);
+  if (!parsed.success) throw new DomainError('PLEX_INVALID_RESPONSE', 'Plex returned an invalid unlink response.', 502);
   return parsed.data;
 }

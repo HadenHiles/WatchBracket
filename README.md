@@ -8,9 +8,13 @@ Watch Bracket is a self-hosted, real-time party game for turning “what should 
 | --- | --- |
 | ![Watch Bracket home screen](docs/assets/demo-home.png) | ![Watch Bracket room lobby](docs/assets/demo-lobby.png) |
 
-| Pair the television display | Crown a winner |
+| Pin two private picks | Vote poster-first |
 | --- | --- |
-| ![Watch Bracket shared display](docs/assets/demo-display.png) | ![Watch Bracket winner presentation](docs/assets/demo-winner.png) |
+| ![Watch Bracket private nomination screen](docs/assets/demo-nominations.png) | ![Watch Bracket poster voting screen](docs/assets/demo-voting.png) |
+
+| Pair the television display | Crown a winner on the podium |
+| --- | --- |
+| ![Watch Bracket shared display](docs/assets/demo-display.png) | ![Watch Bracket animated winner podium](docs/assets/demo-winner.png) |
 
 ## Docker NAS quick start
 

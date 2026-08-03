@@ -11,8 +11,8 @@ async function join(context: BrowserContext, code: string, nickname: string) {
   return page;
 }
 
-async function makePicks(page: Page) {
-  await page.getByLabel('Find a title').fill('Dune');
+async function makePicks(page: Page, query: string) {
+  await page.getByLabel('Find a title').fill(query);
   const posters = page.locator('.poster-grid').last().locator('button.poster-choice');
   await expect(posters.first()).toBeVisible({ timeout: 15_000 });
   await expect.poll(() => posters.count()).toBeGreaterThan(1);
@@ -30,11 +30,16 @@ test('nominations keep picks pinned and contenders private by default', async ({
   test.setTimeout(120_000);
   const hostContext = await browser.newContext();
   const guestContext = await browser.newContext();
+  const guestTwoContext = await browser.newContext();
+  const guestThreeContext = await browser.newContext();
   const host = await hostContext.newPage();
   await host.goto('/');
   await host.getByRole('button', { name: 'Create a Room' }).click();
   const code = (await host.locator('.room-code').first().textContent())!.trim();
   const guest = await join(guestContext, code, 'Private Picker');
+  const guestTwo = await join(guestTwoContext, code, 'Tape Rewinder');
+  const guestThree = await join(guestThreeContext, code, 'Snack Runner');
+  const voters = [host, guest, guestTwo, guestThree];
 
   await host.getByRole('button', { name: 'Start nomination timer' }).click();
   await expect(host.locator('.nomination-dock')).toBeVisible();
@@ -42,7 +47,12 @@ test('nominations keep picks pinned and contenders private by default', async ({
   await expect(host.getByRole('button', { name: 'Connect my Plex' })).toBeVisible();
   await expect(guest.getByRole('button', { name: 'Connect my Plex' })).toBeVisible();
 
-  await Promise.all([makePicks(host), makePicks(guest)]);
+  await Promise.all([
+    makePicks(host, 'Dune'),
+    makePicks(guest, 'Star Wars'),
+    makePicks(guestTwo, 'The Matrix'),
+    makePicks(guestThree, 'Alien'),
+  ]);
   if (captureDocs) await host.screenshot({ path: 'docs/assets/demo-nominations.png', fullPage: true });
   await host.getByRole('button', { name: 'Reveal now' }).click();
 
@@ -61,24 +71,30 @@ test('nominations keep picks pinned and contenders private by default', async ({
   if (captureDocs) await host.screenshot({ path: 'docs/assets/demo-voting.png', fullPage: true });
 
   for (let matchup = 1; matchup <= 9; matchup += 1) {
-    await host.locator('button.matchup-poster-option').first().click();
-    await guest.locator('button.matchup-poster-option').first().click();
-    await host.getByRole('button', { name: 'Lock in pick' }).click();
-    await expect(host.getByRole('button', { name: 'Pick locked in' })).toBeVisible();
-    await guest.getByRole('button', { name: 'Lock in pick' }).click();
+    await Promise.all(voters.map((voter) => voter.locator('button.matchup-poster-option').first().click()));
+    await Promise.all(voters.map((voter) => voter.getByRole('button', { name: 'Lock in pick' }).click()));
     await expect(host.getByText('advances')).toBeVisible({ timeout: 5_000 });
     await host.getByRole('button', { name: 'Skip presentation' }).click();
     if (matchup === 9) break;
     await expect(host.getByText('Matchup incoming. Voting opens when the intro completes.')).toBeVisible();
     await host.getByRole('button', { name: 'Skip presentation' }).click();
     await expect(host.getByText('Tap a poster, then lock it in.')).toBeVisible();
+    await host.waitForTimeout(750);
   }
 
   await expect(host.getByLabel('Tournament podium')).toBeVisible();
   await expect(host.locator('.podium-place')).toHaveCount(3);
   await expect(host.locator('.controller-confetti i')).toHaveCount(32);
   await expect(host.getByRole('link', { name: /Watch now on Plex|Open in Jellyseerr to request/ })).toBeVisible();
-  if (captureDocs) await host.screenshot({ path: 'docs/assets/demo-winner.png', fullPage: true });
+  if (captureDocs) {
+    await host.waitForTimeout(1_200);
+    await host.screenshot({ path: 'docs/assets/demo-winner.png', fullPage: true });
+  }
 
-  await Promise.all([hostContext.close(), guestContext.close()]);
+  await Promise.all([
+    hostContext.close(),
+    guestContext.close(),
+    guestTwoContext.close(),
+    guestThreeContext.close(),
+  ]);
 });

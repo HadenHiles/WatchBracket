@@ -396,10 +396,14 @@ export default function RoomPage() {
   const castButtonLabel =
     cast.state === "loading"
       ? "Finding TVs…"
+      : cast.state === "unavailable"
+        ? "No TVs found"
       : cast.state === "connecting"
         ? "Connecting…"
         : cast.state === "connected"
           ? `Casting to ${cast.deviceName}`
+          : cast.state === "error"
+            ? "Cast unavailable"
           : "Cast to TV";
   return (
     <main className="shell stack">

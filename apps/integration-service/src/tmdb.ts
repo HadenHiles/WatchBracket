@@ -4,6 +4,9 @@ import { CanonicalMediaItemSchema, type CanonicalMediaItem, type RecommendationC
 const API_ORIGIN = 'https://api.themoviedb.org';
 const IMAGE_ORIGIN = 'https://image.tmdb.org/t/p';
 const METADATA_TTL_MS = 6 * 60 * 60 * 1000;
+const MAX_CONCURRENT_REQUESTS = 4;
+const MIN_REQUEST_INTERVAL_MS = 50;
+const MAX_RETRY_DELAY_MS = 10_000;
 
 const SearchItemSchema = z.object({
   id: z.number().int().positive(), media_type: z.enum(['movie', 'tv', 'person']).optional(),
@@ -35,9 +38,65 @@ export class TmdbProviderError extends Error {
 
 export class TmdbProvider {
   private readonly cache = new Map<string, CacheEntry>();
+  private readonly inFlight = new Map<string, Promise<unknown>>();
+  private readonly capacityWaiters: Array<() => void> = [];
+  private activeRequests = 0;
+  private nextRequestAt = 0;
   constructor(private readonly token: string | undefined, private readonly fetcher: Fetcher = fetch) {}
 
   get configured() { return Boolean(this.token && !this.token.toLowerCase().includes('replace-me')); }
+
+  private async acquireCapacity() {
+    if (this.activeRequests >= MAX_CONCURRENT_REQUESTS) {
+      await new Promise<void>((resolve) => this.capacityWaiters.push(resolve));
+    }
+    this.activeRequests += 1;
+    const now = Date.now();
+    const startsAt = Math.max(now, this.nextRequestAt);
+    this.nextRequestAt = startsAt + MIN_REQUEST_INTERVAL_MS;
+    if (startsAt > now) await new Promise((resolve) => setTimeout(resolve, startsAt - now));
+  }
+
+  private releaseCapacity() {
+    this.activeRequests -= 1;
+    this.capacityWaiters.shift()?.();
+  }
+
+  private retryDelay(response: Response, attempt: number) {
+    const retryAfter = response.headers.get('retry-after');
+    if (retryAfter) {
+      const seconds = Number(retryAfter);
+      const milliseconds = Number.isFinite(seconds)
+        ? seconds * 1000
+        : Date.parse(retryAfter) - Date.now();
+      if (Number.isFinite(milliseconds) && milliseconds >= 0)
+        return Math.min(milliseconds, MAX_RETRY_DELAY_MS);
+    }
+    return Math.min(250 * 2 ** attempt, MAX_RETRY_DELAY_MS);
+  }
+
+  private async fetchWithRetry(url: URL, bearerToken: string | undefined) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await this.acquireCapacity();
+        let response: Response;
+        try {
+          response = await this.fetcher(url, { headers: { ...(bearerToken ? { authorization: `Bearer ${bearerToken}` } : {}), accept: 'application/json' }, signal: AbortSignal.timeout(5_000) });
+        } finally {
+          this.releaseCapacity();
+        }
+        if (response.ok) return await response.json() as unknown;
+        if (response.status !== 429 && response.status < 500) throw new TmdbProviderError('UPSTREAM_ERROR', `TMDB rejected the request (${response.status}).`);
+        if (attempt === 2) throw new TmdbProviderError('UPSTREAM_ERROR', `TMDB is temporarily unavailable (${response.status}).`);
+        await new Promise((resolve) => setTimeout(resolve, this.retryDelay(response, attempt)));
+      } catch (error) {
+        if (error instanceof TmdbProviderError) throw error;
+        if (attempt === 2) throw new TmdbProviderError(error instanceof DOMException && error.name === 'TimeoutError' ? 'UPSTREAM_TIMEOUT' : 'UPSTREAM_ERROR', 'TMDB did not respond in time.');
+        await new Promise((resolve) => setTimeout(resolve, Math.min(250 * 2 ** attempt, MAX_RETRY_DELAY_MS)));
+      }
+    }
+    throw new TmdbProviderError('UPSTREAM_ERROR', 'TMDB is temporarily unavailable.');
+  }
 
   private async request(path: string, query: Record<string, string | number | boolean | undefined> = {}) {
     if (!this.configured) throw new TmdbProviderError('NOT_CONFIGURED', 'TMDB is not configured.');
@@ -45,20 +104,17 @@ export class TmdbProvider {
     for (const [key, value] of Object.entries(query)) if (value !== undefined) url.searchParams.set(key, String(value));
     const bearerToken = this.token!.startsWith('eyJ') ? this.token : undefined;
     if (!bearerToken) url.searchParams.set('api_key', this.token!);
-    const cacheKey = url.toString(); const cached = this.cache.get(cacheKey);
+    const cacheKey = url.toString();
+    const cached = this.cache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) return cached.value;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const response = await this.fetcher(url, { headers: { ...(bearerToken ? { authorization: `Bearer ${bearerToken}` } : {}), accept: 'application/json' }, signal: AbortSignal.timeout(5_000) });
-        if (response.ok) { const value: unknown = await response.json(); this.cache.set(cacheKey, { value, expiresAt: Date.now() + METADATA_TTL_MS }); return value; }
-        if (response.status !== 429 && response.status < 500) throw new TmdbProviderError('UPSTREAM_ERROR', `TMDB rejected the request (${response.status}).`);
-        if (attempt === 2) throw new TmdbProviderError('UPSTREAM_ERROR', `TMDB is temporarily unavailable (${response.status}).`);
-      } catch (error) {
-        if (error instanceof TmdbProviderError) throw error;
-        if (attempt === 2) throw new TmdbProviderError(error instanceof DOMException && error.name === 'TimeoutError' ? 'UPSTREAM_TIMEOUT' : 'UPSTREAM_ERROR', 'TMDB did not respond in time.');
-      }
-    }
-    throw new TmdbProviderError('UPSTREAM_ERROR', 'TMDB is temporarily unavailable.');
+    const existing = this.inFlight.get(cacheKey);
+    if (existing) return existing;
+    const pending = this.fetchWithRetry(url, bearerToken).then((value) => {
+      this.cache.set(cacheKey, { value, expiresAt: Date.now() + METADATA_TTL_MS });
+      return value;
+    }).finally(() => this.inFlight.delete(cacheKey));
+    this.inFlight.set(cacheKey, pending);
+    return pending;
   }
 
   async details(mediaType: MediaType, id: number, region: string, language: string): Promise<CanonicalMediaItem> {

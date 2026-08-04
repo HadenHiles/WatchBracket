@@ -7,7 +7,66 @@ export type MockMediaItem = {
   contentRating: string;
   genres: string[];
   synopsis: string;
+  posterUrl?: string;
+  availability?: {
+    region: string;
+    link: string;
+    attribution: 'JustWatch';
+    offers: [];
+  };
 };
+
+export type SeededCatalogItem = MockMediaItem & {
+  sourceTmdbId: number;
+};
+
+/**
+ * A deliberately small, checked-in metadata snapshot for browser automation.
+ *
+ * These records keep real-looking search flows useful without allowing tests,
+ * crawlers, screenshot tools, or other automated clients to call TMDB. Artwork
+ * is synthetic and served locally; `sourceTmdbId` is provenance only and is
+ * never persisted as a live TMDB identity.
+ */
+export const seededCatalogSnapshotCapturedAt = '2026-08-04' as const;
+
+const seededMovie = (
+  sourceTmdbId: number,
+  title: string,
+  releaseYear: number,
+  runtimeMinutes: number,
+  contentRating: string,
+  genres: string[],
+  synopsis: string,
+): SeededCatalogItem => ({
+  catalogKey: `mock:tmdb-snapshot:${sourceTmdbId}`,
+  sourceTmdbId,
+  mediaType: 'MOVIE',
+  title,
+  releaseYear,
+  runtimeMinutes,
+  contentRating,
+  genres,
+  synopsis,
+  posterUrl: `/artwork/seeded/${sourceTmdbId}.svg`,
+  availability: {
+    region: 'CA',
+    link: `https://www.themoviedb.org/movie/${sourceTmdbId}/watch?locale=CA`,
+    attribution: 'JustWatch',
+    offers: [],
+  },
+});
+
+export const seededCatalogSnapshot: readonly SeededCatalogItem[] = [
+  seededMovie(438631, 'Dune', 2021, 155, 'PG-13', ['Science Fiction', 'Adventure'], 'A gifted young heir travels to a dangerous desert world at the centre of an interstellar struggle.'),
+  seededMovie(841, 'Dune', 1984, 137, 'PG-13', ['Science Fiction', 'Adventure'], 'A young nobleman is drawn into a conflict over a desert planet and its most valuable resource.'),
+  seededMovie(11, 'Star Wars', 1977, 121, 'PG', ['Adventure', 'Science Fiction'], 'A farm boy joins a rebellion and sets out to rescue a princess from an imposing space station.'),
+  seededMovie(1891, 'The Empire Strikes Back', 1980, 124, 'PG', ['Adventure', 'Science Fiction'], 'The Star Wars rebels scatter while a young hero continues his training and confronts a dark truth.'),
+  seededMovie(603, 'The Matrix', 1999, 136, 'R', ['Action', 'Science Fiction'], 'A computer hacker discovers that the familiar world hides a vast simulated reality.'),
+  seededMovie(604, 'The Matrix Reloaded', 2003, 138, 'R', ['Action', 'Science Fiction'], 'The resistance races to protect its last city while its chosen fighter searches for the source of the Matrix.'),
+  seededMovie(348, 'Alien', 1979, 117, 'R', ['Horror', 'Science Fiction'], 'A commercial starship crew answers a distress signal and brings a deadly organism aboard.'),
+  seededMovie(679, 'Aliens', 1986, 137, 'R', ['Action', 'Science Fiction', 'Horror'], 'A survivor returns to a remote colony with a rescue team after its residents stop communicating.'),
+] as const;
 
 export const mockCatalog: readonly MockMediaItem[] = [
   { catalogKey: 'mock:aurora-drift', mediaType: 'MOVIE', title: 'Aurora Drift', releaseYear: 2024, runtimeMinutes: 112, contentRating: 'PG-13', genres: ['Science Fiction', 'Adventure'], synopsis: 'A rescue pilot follows a mysterious signal beyond the northern lights.' },
@@ -31,6 +90,15 @@ export const mockCatalog: readonly MockMediaItem[] = [
 export function searchMockCatalog(query: string, mediaType?: 'MOVIE' | 'TV') {
   const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
   return mockCatalog.filter((item) => {
+    if (mediaType && item.mediaType !== mediaType) return false;
+    const haystack = `${item.title} ${item.genres.join(' ')} ${item.synopsis}`.toLocaleLowerCase();
+    return terms.every((term) => haystack.includes(term));
+  }).slice(0, 12);
+}
+
+export function searchSeededCatalogSnapshot(query: string, mediaType?: 'MOVIE' | 'TV') {
+  const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  return seededCatalogSnapshot.filter((item) => {
     if (mediaType && item.mediaType !== mediaType) return false;
     const haystack = `${item.title} ${item.genres.join(' ')} ${item.synopsis}`.toLocaleLowerCase();
     return terms.every((term) => haystack.includes(term));

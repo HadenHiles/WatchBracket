@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { settleForScreenshot } from './visual';
+import { newAutomationContext, settleForScreenshot } from './visual';
 
 const captureDocs = process.env.CAPTURE_DOCS === '1';
 
@@ -33,10 +33,10 @@ async function makePicks(page: Page, query: string, secondQuery?: string) {
 
 test('nominations keep picks pinned and contenders private by default', async ({ browser }) => {
   test.setTimeout(captureDocs ? 180_000 : 120_000);
-  const hostContext = await browser.newContext();
-  const guestContext = await browser.newContext();
-  const guestTwoContext = await browser.newContext();
-  const guestThreeContext = await browser.newContext();
+  const hostContext = await newAutomationContext(browser);
+  const guestContext = await newAutomationContext(browser);
+  const guestTwoContext = await newAutomationContext(browser);
+  const guestThreeContext = await newAutomationContext(browser);
   let docsDisplayContext: BrowserContext | undefined;
   let docsPairingCode: string | undefined;
   const host = await hostContext.newPage();
@@ -108,14 +108,14 @@ test('nominations keep picks pinned and contenders private by default', async ({
   await expect(host.getByLabel('Tournament podium')).toBeVisible();
   await expect(host.locator('.podium-place')).toHaveCount(3);
   await expect(host.locator('.controller-confetti i')).toHaveCount(32);
-  await expect(host.getByRole('link', { name: /Watch now on Plex|Open in Jellyseerr to request/ })).toBeVisible();
+  await expect(host.getByRole('link', { name: /Watch now on Plex|Open in Jellyseerr to request|View streaming options/ })).toBeVisible();
   if (captureDocs) {
     await host.setViewportSize({ width: 1280, height: 1000 });
     await host.locator('.winner-controller').scrollIntoViewIfNeeded();
     await settleForScreenshot(host);
     await host.screenshot({ path: 'docs/assets/demo-winner.png' });
 
-    docsDisplayContext = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    docsDisplayContext = await newAutomationContext(browser, { viewport: { width: 1280, height: 720 } });
     const display = await docsDisplayContext.newPage();
     await display.goto('/display');
     await display.getByLabel('TV code').fill(docsPairingCode!);

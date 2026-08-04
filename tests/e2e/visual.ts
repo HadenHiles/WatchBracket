@@ -1,4 +1,14 @@
-import type { Page } from '@playwright/test';
+import type { Browser, BrowserContextOptions, Page } from '@playwright/test';
+
+export function newAutomationContext(browser: Browser, options: BrowserContextOptions = {}) {
+  return browser.newContext({
+    ...options,
+    extraHTTPHeaders: {
+      ...options.extraHTTPHeaders,
+      'x-watch-bracket-automation': 'playwright',
+    },
+  });
+}
 
 export async function settleForScreenshot(page: Page) {
   await page.waitForLoadState('networkidle').catch(() => undefined);

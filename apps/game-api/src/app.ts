@@ -144,6 +144,15 @@ const ParamsSubmissionSchema = z.object({
 });
 const ParamsMatchupSchema = z.object({ matchupId: z.uuid() });
 
+const automationUserAgent = /(?:bot|crawler|spider|playwright|puppeteer|selenium|headlesschrome|lighthouse)/i;
+
+export function isAutomatedRequest(request: Pick<FastifyRequest, "headers">) {
+  const marker = request.headers["x-watch-bracket-automation"];
+  const userAgent = request.headers["user-agent"];
+  return marker === "1" || marker === "playwright" ||
+    (typeof userAgent === "string" && automationUserAgent.test(userAgent));
+}
+
 function parse<T>(schema: z.ZodType<T>, input: unknown): T {
   const result = schema.safeParse(input);
   if (!result.success)
@@ -572,6 +581,7 @@ export async function buildApp(env: GameApiEnv) {
       query.q,
       query.mediaType,
       query.autocomplete,
+      isAutomatedRequest(request),
     );
   });
   app.get("/api/plex/status", async (request) => {

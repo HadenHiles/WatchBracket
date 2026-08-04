@@ -24,4 +24,41 @@ describe('TmdbProvider', () => {
     expect(item?.availability.attribution).toBe('JustWatch');
     expect(item?.availability.offers.map((offer) => offer.category)).toEqual(['SUBSCRIPTION', 'ADS', 'RENT', 'BUY']);
   });
+
+  it('coalesces identical requests and caches their result', async () => {
+    let calls = 0;
+    const fakeFetch = (async () => {
+      calls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return json({
+        id: 11, title: 'Example', original_title: 'Example', release_date: '2024-03-01', overview: '', runtime: 100,
+        genres: [], popularity: 1, vote_average: 7, vote_count: 10, adult: false,
+        release_dates: { results: [] }, 'watch/providers': { results: {} },
+      });
+    }) as typeof fetch;
+    const provider = new TmdbProvider('valid-read-token', fakeFetch);
+    const input = ['MOVIE' as const, 11, 'CA', 'en-CA'] as const;
+    const [first, second] = await Promise.all([provider.details(...input), provider.details(...input)]);
+    const third = await provider.details(...input);
+    expect(first.catalogKey).toBe('tmdb:MOVIE:11');
+    expect(second).toEqual(first);
+    expect(third).toEqual(first);
+    expect(calls).toBe(1);
+  });
+
+  it('honours a rate-limit response before retrying', async () => {
+    let calls = 0;
+    const fakeFetch = (async () => {
+      calls += 1;
+      if (calls === 1) return new Response('{}', { status: 429, headers: { 'retry-after': '0' } });
+      return json({
+        id: 11, title: 'Example', original_title: 'Example', release_date: '2024-03-01', overview: '', runtime: 100,
+        genres: [], popularity: 1, vote_average: 7, vote_count: 10, adult: false,
+        release_dates: { results: [] }, 'watch/providers': { results: {} },
+      });
+    }) as typeof fetch;
+    const provider = new TmdbProvider('valid-read-token', fakeFetch);
+    await expect(provider.details('MOVIE', 11, 'CA', 'en-CA')).resolves.toMatchObject({ tmdbId: 11 });
+    expect(calls).toBe(2);
+  });
 });

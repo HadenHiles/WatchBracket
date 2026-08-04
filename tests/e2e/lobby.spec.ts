@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext } from "@playwright/test";
-import { settleForScreenshot } from "./visual";
+import { newAutomationContext, settleForScreenshot } from "./visual";
 
 const captureDocs = process.env.CAPTURE_DOCS === "1";
 
@@ -15,11 +15,11 @@ async function join(context: BrowserContext, code: string, nickname: string) {
 test("host, guests, and an independent revocable display share a durable lobby", async ({
   browser,
 }) => {
-  const hostContext = await browser.newContext();
-  const guestBContext = await browser.newContext();
-  const guestCContext = await browser.newContext();
-  const displayContext = await browser.newContext();
-  const lateContext = await browser.newContext();
+  const hostContext = await newAutomationContext(browser);
+  const guestBContext = await newAutomationContext(browser);
+  const guestCContext = await newAutomationContext(browser);
+  const displayContext = await newAutomationContext(browser);
+  const lateContext = await newAutomationContext(browser);
 
   const host = await hostContext.newPage();
   await host.goto("/");

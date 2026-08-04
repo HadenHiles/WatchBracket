@@ -10,6 +10,8 @@ Thanks for helping make self-hosted movie night more fun.
 4. Use the deterministic mock catalog. A media server and provider credentials are not required.
 5. Use `/display/test` to exercise every presentation scene at 720p and 1080p.
 
+Playwright adds `X-Watch-Bracket-Automation: playwright` to every browser request. The game API routes marked automation and common crawler user agents to the checked-in TMDB metadata snapshot, whose posters are generated locally. Keep that marker enabled: automated tests and screenshot jobs must never depend on or consume the live TMDB quota.
+
 Before opening a pull request, run:
 
 ```sh

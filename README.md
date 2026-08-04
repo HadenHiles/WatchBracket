@@ -57,7 +57,7 @@ Connect your existing reverse proxy or Cloudflare Tunnel to `watchbracket_edge`,
 
 After the one-time environment and reverse-proxy setup, routine restarts are simply `docker compose up -d`. Source upgrades should use `git pull --ff-only` followed by `docker compose up -d --build`.
 
-TMDB search and wildcard generation run exclusively through the private integration service. Development and test environments retain the deterministic local catalog as an explicit offline fallback; production never silently fills a bracket with fallback titles that bypass room filters. Google Cast launching requires a registered Custom Web Receiver application ID and a registered physical test device; see `docs/cast/MILESTONE-2.md`.
+TMDB search and wildcard generation run exclusively through the private integration service. Development environments retain the deterministic local catalog as an explicit offline fallback; production never silently fills a bracket with fallback titles that bypass room filters. Browser automation is separately identified by an explicit request marker (with common crawler user agents as a fallback) and always receives a checked-in real-title metadata snapshot plus locally generated artwork, even when it targets a production-like stack. This prevents Playwright, screenshot tools, and crawlers from consuming TMDB quota. Google Cast launching requires a registered Custom Web Receiver application ID and a registered physical test device; see `docs/cast/MILESTONE-2.md`.
 
 ## Development prerequisites
 

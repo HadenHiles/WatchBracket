@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, isNull, ne, sql } from 'drizzle-orm';
 import { auditEvents, availabilitySnapshots, households, mediaItems, participants, rooms, submissions } from '@watch-bracket/db';
-import { mockCatalog, searchMockCatalog } from '@watch-bracket/mock-catalog';
+import { mockCatalog, searchMockCatalog, searchSeededCatalogSnapshot, seededCatalogSnapshot, seededCatalogSnapshotCapturedAt } from '@watch-bracket/mock-catalog';
 import type { CanonicalMediaItem } from '@watch-bracket/provider-contracts';
 import { HouseRulesSchema, type HouseRules } from '@watch-bracket/realtime-protocol';
 import type { DomainContext } from './domain.js';
@@ -22,9 +22,29 @@ export const restoredNominationDeadline = (now: Date, pausedSeconds: number) =>
   new Date(now.getTime() + Math.max(1, pausedSeconds) * 1000);
 
 export async function seedMockCatalog(ctx: DomainContext) {
-  for (const item of mockCatalog) {
-    await ctx.db.insert(mediaItems).values({ ...item, originalTitle: item.title, genres: item.genres, metadata: { source: 'MOCK', deterministic: true } })
-      .onConflictDoUpdate({ target: mediaItems.catalogKey, set: { mediaType: item.mediaType, title: item.title, originalTitle: item.title, releaseYear: item.releaseYear, runtimeMinutes: item.runtimeMinutes, contentRating: item.contentRating, genres: item.genres, synopsis: item.synopsis, updatedAt: new Date() } });
+  for (const item of [...mockCatalog, ...seededCatalogSnapshot]) {
+    const sourceTmdbId = 'sourceTmdbId' in item ? item.sourceTmdbId : undefined;
+    const metadata = {
+      source: sourceTmdbId ? 'TMDB_SNAPSHOT' : 'MOCK',
+      deterministic: true,
+      ...(sourceTmdbId ? { sourceTmdbId, snapshotCapturedAt: seededCatalogSnapshotCapturedAt } : {}),
+      ...('availability' in item && item.availability ? { availability: item.availability } : {}),
+    };
+    const values = {
+      catalogKey: item.catalogKey,
+      mediaType: item.mediaType,
+      title: item.title,
+      originalTitle: item.title,
+      releaseYear: item.releaseYear,
+      runtimeMinutes: item.runtimeMinutes,
+      contentRating: item.contentRating,
+      genres: item.genres,
+      synopsis: item.synopsis,
+      posterUrl: item.posterUrl ?? null,
+      metadata,
+    };
+    await ctx.db.insert(mediaItems).values(values)
+      .onConflictDoUpdate({ target: mediaItems.catalogKey, set: { ...values, updatedAt: new Date() } });
   }
 }
 
@@ -44,11 +64,18 @@ export async function cacheTmdbItems(ctx: DomainContext, items: CanonicalMediaIt
   }
 }
 
-export async function searchCatalog(ctx: DomainContext, roomId: string, query: string, mediaType?: 'MOVIE' | 'TV', autocomplete = false) {
+export async function searchCatalog(ctx: DomainContext, roomId: string, query: string, mediaType?: 'MOVIE' | 'TV', autocomplete = false, useSeededSnapshot = false) {
   const [room] = await ctx.db.select({ rules: rooms.rules, householdId: rooms.householdId }).from(rooms).where(eq(rooms.id, roomId)).limit(1);
   if (!room) throw new DomainError('ROOM_NOT_FOUND', 'Room not found.', 404);
   const [household]=await ctx.db.select({region:households.region}).from(households).where(eq(households.id,room.householdId)).limit(1);
   const rules = HouseRulesSchema.parse(room.rules);
+  if (useSeededSnapshot) {
+    return {
+      source: 'MOCK' as const,
+      warning: 'Automated client detected; using the deterministic catalog snapshot.',
+      items: searchSeededCatalogSnapshot(query, mediaType).filter((item) => eligibilityFailures(item, rules).length === 0),
+    };
+  }
   try {
     const result = await searchTmdb(ctx, { query, mediaType, region: household?.region??'CA', limit: autocomplete ? 8 : 12 });
     const enriched = autocomplete && (rules.availabilityMode ?? 'ANY') === 'ANY'

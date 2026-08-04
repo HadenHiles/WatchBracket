@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  absoluteCatalogArtwork,
   pausedNominationSeconds,
   restoredNominationDeadline,
 } from "./nominations.js";
 
 describe("nomination auto-start grace period", () => {
+  it("stores seeded artwork as a protocol-valid absolute URL", () => {
+    expect(absoluteCatalogArtwork("https://bracket.example/", "/artwork/seeded/438631.svg"))
+      .toBe("https://bracket.example/artwork/seeded/438631.svg");
+  });
+
   it("preserves the unused whole-second nomination time", () => {
     const now = new Date("2026-08-03T00:00:00.250Z");
     const deadline = new Date("2026-08-03T00:01:17.900Z");

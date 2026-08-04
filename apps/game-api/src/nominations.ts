@@ -21,6 +21,9 @@ export const pausedNominationSeconds = (deadline: Date, now: Date) =>
 export const restoredNominationDeadline = (now: Date, pausedSeconds: number) =>
   new Date(now.getTime() + Math.max(1, pausedSeconds) * 1000);
 
+export const absoluteCatalogArtwork = (publicAppUrl: string, posterUrl: string | undefined) =>
+  posterUrl ? new URL(posterUrl, publicAppUrl).toString() : undefined;
+
 export async function seedMockCatalog(ctx: DomainContext) {
   for (const item of [...mockCatalog, ...seededCatalogSnapshot]) {
     const sourceTmdbId = 'sourceTmdbId' in item ? item.sourceTmdbId : undefined;
@@ -40,7 +43,7 @@ export async function seedMockCatalog(ctx: DomainContext) {
       contentRating: item.contentRating,
       genres: item.genres,
       synopsis: item.synopsis,
-      posterUrl: item.posterUrl ?? null,
+      posterUrl: absoluteCatalogArtwork(ctx.env.PUBLIC_APP_URL, item.posterUrl) ?? null,
       metadata,
     };
     await ctx.db.insert(mediaItems).values(values)
@@ -73,7 +76,12 @@ export async function searchCatalog(ctx: DomainContext, roomId: string, query: s
     return {
       source: 'MOCK' as const,
       warning: 'Automated client detected; using the deterministic catalog snapshot.',
-      items: searchSeededCatalogSnapshot(query, mediaType).filter((item) => eligibilityFailures(item, rules).length === 0),
+      items: searchSeededCatalogSnapshot(query, mediaType)
+        .filter((item) => eligibilityFailures(item, rules).length === 0)
+        .map((item) => ({
+          ...item,
+          posterUrl: absoluteCatalogArtwork(ctx.env.PUBLIC_APP_URL, item.posterUrl),
+        })),
     };
   }
   try {

@@ -30,6 +30,17 @@ export type PreparedWildcard = {
   reasonCodes: string[];
 };
 
+export function prioritizeUnseenCandidates<T extends { mediaItemId: string }>(
+  items: T[],
+  recentExclusions: Set<string>,
+) {
+  const unseen: T[] = [];
+  const recent: T[] = [];
+  for (const item of items)
+    (recentExclusions.has(item.mediaItemId) ? recent : unseen).push(item);
+  return [...unseen, ...recent];
+}
+
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 const stableTie = (seed: string, key: string) =>
   parseInt(
@@ -291,7 +302,7 @@ export async function prepareTmdbWildcards(
   const ranked = canonical
     .flatMap((candidate) => {
       const mediaItemId = idByKey.get(candidate.item.catalogKey);
-      if (!mediaItemId || recentExclusions.has(mediaItemId)) return [];
+      if (!mediaItemId) return [];
       return [
         {
           mediaItemId,
@@ -311,10 +322,11 @@ export async function prepareTmdbWildcards(
       (a, b) =>
         b.scoreTotal - a.scoreTotal || a.catalogKey.localeCompare(b.catalogKey),
     );
+  const rankedByFreshness = prioritizeUnseenCandidates(ranked, recentExclusions);
   const selected: typeof ranked = [];
   const deferred: typeof ranked = [];
   const genreCounts = new Map<string, number>();
-  for (const item of ranked) {
+  for (const item of rankedByFreshness) {
     if ((genreCounts.get(item.primaryGenre) ?? 0) >= 3) deferred.push(item);
     else {
       selected.push(item);
@@ -326,7 +338,12 @@ export async function prepareTmdbWildcards(
   }
   return [...selected, ...deferred]
     .slice(0, limit)
-    .map(({ primaryGenre: _primaryGenre, ...item }) => item);
+    .map(({ primaryGenre: _primaryGenre, ...item }) => ({
+      ...item,
+      reasonCodes: recentExclusions.has(item.mediaItemId)
+        ? [...item.reasonCodes, "Recently seen fallback used to complete the bracket"]
+        : item.reasonCodes,
+    }));
 }
 
 export async function getRecommendationDebug(db: Database, roomId: string) {

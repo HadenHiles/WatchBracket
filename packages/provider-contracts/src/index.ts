@@ -24,6 +24,7 @@ export const CanonicalMediaItemSchema = z.object({
   mediaType: MediaTypeSchema,
   title: z.string().min(1),
   originalTitle: z.string().min(1),
+  originalLanguage: z.string().min(2).max(3),
   releaseDate: z.string().nullable(),
   releaseYear: z.number().int().min(1870).max(2200),
   runtimeMinutes: z.number().int().positive().nullable(),

@@ -11,6 +11,7 @@ const MAX_RETRY_DELAY_MS = 10_000;
 const SearchItemSchema = z.object({
   id: z.number().int().positive(), media_type: z.enum(['movie', 'tv', 'person']).optional(),
   title: z.string().optional(), name: z.string().optional(), original_title: z.string().optional(), original_name: z.string().optional(),
+  original_language: z.string().min(2).max(3).optional(),
   release_date: z.string().optional(), first_air_date: z.string().optional(), overview: z.string().optional(),
   poster_path: z.string().nullable().optional(), backdrop_path: z.string().nullable().optional(), adult: z.boolean().optional(),
   popularity: z.number().optional(), vote_average: z.number().optional(), vote_count: z.number().int().optional()
@@ -19,6 +20,7 @@ const ResultsSchema = z.object({ results: z.array(SearchItemSchema) });
 const ProviderSchema = z.object({ provider_id: z.number().int().positive(), provider_name: z.string(), logo_path: z.string().nullable().optional() });
 const RegionProvidersSchema = z.object({ link: z.string().url().nullable().optional(), flatrate: z.array(ProviderSchema).optional(), free: z.array(ProviderSchema).optional(), ads: z.array(ProviderSchema).optional(), rent: z.array(ProviderSchema).optional(), buy: z.array(ProviderSchema).optional() });
 const DetailsSchema = SearchItemSchema.extend({
+  original_language: z.string().min(2).max(3),
   runtime: z.number().int().positive().nullable().optional(), episode_run_time: z.array(z.number().int().positive()).optional(),
   genres: z.array(z.object({ id: z.number().int(), name: z.string() })).default([]),
   release_dates: z.object({ results: z.array(z.object({ iso_3166_1: z.string(), release_dates: z.array(z.object({ certification: z.string().optional(), type: z.number().int().optional() })) })) }).optional(),
@@ -140,7 +142,7 @@ export class TmdbProvider {
     const runtime = mediaType === 'MOVIE' ? item.runtime ?? null : item.episode_run_time?.find((value) => value > 0) ?? null;
     return CanonicalMediaItemSchema.parse({
       catalogKey: `tmdb:${mediaType}:${item.id}`, tmdbId: item.id, mediaType, title, originalTitle,
-      releaseDate, releaseYear: Number(releaseDate.slice(0, 4)), runtimeMinutes: runtime, contentRating: certification || null,
+      originalLanguage: item.original_language, releaseDate, releaseYear: Number(releaseDate.slice(0, 4)), runtimeMinutes: runtime, contentRating: certification || null,
       genres: item.genres.map((genre) => genre.name), synopsis: item.overview ?? '',
       posterUrl: item.poster_path ? `${IMAGE_ORIGIN}/w500${item.poster_path}` : null,
       backdropUrl: item.backdrop_path ? `${IMAGE_ORIGIN}/w1280${item.backdrop_path}` : null,
@@ -179,7 +181,7 @@ export class TmdbProvider {
       const sources = await Promise.all([
         this.request(`/${pathType}/${seed.tmdbId}/recommendations`, { language: input.language, page: 1 }).then((value) => ({ kind: 'RECOMMENDATIONS' as const, value })),
         this.request(`/${pathType}/${seed.tmdbId}/similar`, { language: input.language, page: 1 }).then((value) => ({ kind: 'SIMILAR' as const, value })),
-        primaryGenreId ? this.request(`/discover/${pathType}`, { language: input.language, page: 1, include_adult: false, sort_by: 'popularity.desc', with_genres: primaryGenreId, watch_region: input.region }).then((value) => ({ kind: 'DISCOVER' as const, value })) : Promise.resolve({ kind: 'DISCOVER' as const, value: { results: [] } })
+        primaryGenreId ? this.request(`/discover/${pathType}`, { language: input.language, page: 1, include_adult: false, sort_by: 'popularity.desc', with_genres: primaryGenreId, with_original_language: 'en', watch_region: input.region }).then((value) => ({ kind: 'DISCOVER' as const, value })) : Promise.resolve({ kind: 'DISCOVER' as const, value: { results: [] } })
       ]);
       for (const source of sources) {
         const parsed = ResultsSchema.safeParse(source.value); if (!parsed.success) continue;
@@ -190,7 +192,10 @@ export class TmdbProvider {
         }
       }
     }
-    const ranked = [...merged.values()].sort((a, b) => b.seedKeys.size - a.seedKeys.size || (b.item.vote_count ?? 0) - (a.item.vote_count ?? 0) || a.item.id - b.item.id).slice(0, Math.max(input.limit * 2, input.limit));
+    const ranked = [...merged.values()]
+      .filter(({ item }) => item.original_language?.toLowerCase() === 'en')
+      .sort((a, b) => b.seedKeys.size - a.seedKeys.size || (b.item.vote_count ?? 0) - (a.item.vote_count ?? 0) || a.item.id - b.item.id)
+      .slice(0, Math.max(input.limit * 2, input.limit));
     const details = await this.mapDetails(ranked.map(({ item, mediaType }) => ({ item, mediaType })), input.region, input.language, input.limit);
     return details.map((item) => { const source = merged.get(item.catalogKey)!; return { item, relatedSeedKeys: [...source.seedKeys].sort(), sourceKinds: [...source.sourceKinds].sort() }; });
   }

@@ -14,9 +14,9 @@ PostgreSQL uniquely identifies TMDB media by media type plus TMDB ID. It stores 
 
 ## Candidate construction
 
-Direct nominations remain highest priority. The provider merges TMDB recommendation, similar-title, and genre-discovery results across all canonical direct picks. Each wildcard stores normalized score components, total score, source, related-pick reasons, availability reason, runtime reason, and diversity reason.
+Direct nominations remain highest priority. The provider merges TMDB recommendation, similar-title, and genre-discovery results across all canonical direct picks. Automatically filled titles default to English-language originals. Plex seeds are interleaved across connected participants, genre overlap uses every genre on the group's nominations, and popularity plus rating confidence provide a mainstream fallback when taste evidence is weak. Each wildcard stores normalized score components, total score, source, related-pick reasons, availability reason, runtime reason, and taste-match reason.
 
-Selection is reproducible from cached provider inputs, the stored room creation year, and the room random seed. A soft diversity pass limits a primary genre to three initial wildcard slots before relaxing. Hard media type, runtime, release year, excluded genre, adult-content, and watch-now filters run through one shared evaluator for search results, direct submissions, provider wildcards, and development fallback titles.
+Selection is reproducible from cached provider inputs, the stored room creation year, and the room random seed. A soft diversity pass initially limits a primary genre to half the wildcard slots (with a minimum of three) before relaxing. Hard media type, runtime, release year, excluded genre, adult-content, and watch-now filters run through one shared evaluator for search results, direct submissions, provider wildcards, and development fallback titles.
 
 Administrators can open `/admin/recommendations`, enter a room UUID, and inspect the exact stored score components and reasons without exposing credentials.
 

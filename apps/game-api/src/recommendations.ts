@@ -48,13 +48,17 @@ const stableTie = (seed: string, key: string) =>
     16,
   ) / 0xffffff;
 
-function scoreCandidate(
+export const isEnglishRecommendation = (candidate: RecommendationCandidate) =>
+  candidate.item.originalLanguage.toLowerCase() === "en";
+
+export function scoreCandidate(
   candidate: RecommendationCandidate,
-  directGenres: Map<string, number>,
+  tasteGenres: Map<string, number>,
   roomSeed: string,
   referenceYear: number,
   preferenceOwners: Map<string, Set<string>>,
   householdHistorySeedKeys: Set<string>,
+  tasteParticipantCount: number,
 ) {
   const item = candidate.item;
   const watchNow =
@@ -74,13 +78,22 @@ function scoreCandidate(
     (item.voteAverage / 10) * (Math.log10(item.voteCount + 1) / 4),
   );
   const primaryGenre = item.genres[0] ?? "Unknown";
-  const diversity = clamp(1 - (directGenres.get(primaryGenre) ?? 0) / 3);
+  const strongestGenreSignal = Math.max(0, ...tasteGenres.values());
+  const genreSignals = item.genres
+    .map((genre) => tasteGenres.get(genre.toLocaleLowerCase()) ?? 0)
+    .sort((left, right) => right - left)
+    .slice(0, 2);
+  const tasteGenreFit = strongestGenreSignal
+    ? clamp(
+        genreSignals.reduce((total, signal) => total + signal, 0) /
+          (Math.max(1, genreSignals.length) * strongestGenreSignal),
+      )
+    : 0;
   const runtimeFit = item.runtimeMinutes
     ? clamp(1 - Math.abs(item.runtimeMinutes - 110) / 120)
     : 0;
   const age = referenceYear - item.releaseYear;
   const eraFit = age <= 5 ? 0.9 : age <= 20 ? 1 : 0.75;
-  const novelty = clamp(1 - Math.log10(item.voteCount + 1) / 6);
   const householdFit = clamp(
     1 - Math.log10((item.householdHistoryScore ?? 0) + 1) / 3,
   );
@@ -90,37 +103,52 @@ function scoreCandidate(
       ...(preferenceOwners.get(key) ?? []),
     ]),
   );
-  const groupPreferenceFit = clamp(matchingPeople.size / 2);
+  const groupPreferenceFit = clamp(
+    matchingPeople.size / Math.max(1, tasteParticipantCount),
+  );
   const householdHistoryFit = candidate.relatedSeedKeys.some((key) =>
     householdHistorySeedKeys.has(key),
   ) ? 1 : 0;
+  const audienceReach = clamp(Math.log10(item.voteCount + 1) / 4.5);
+  const popularityReach = clamp(Math.log10(item.popularity + 1) / 2.3);
+  const mainstreamConfidence = popularityReach * 0.55 + audienceReach * 0.45;
+  const tasteStrength = Math.max(
+    tasteGenreFit,
+    groupPreferenceFit,
+    householdHistoryFit,
+  );
+  const mainstreamSafety = mainstreamConfidence * (1 - tasteStrength * 0.5);
   const scoreComponents = {
     similarity,
     availableNow,
     clusterSupport,
     ratingConfidence,
-    diversity,
+    tasteGenreFit,
     runtimeFit,
     eraFit,
-    novelty,
+    mainstreamConfidence,
+    mainstreamSafety,
     householdFit,
     requestable,
     groupPreferenceFit,
     householdHistoryFit,
   };
   const weighted =
-    similarity * 0.22 +
-    availableNow * 0.18 +
-    clusterSupport * 0.13 +
+    similarity * 0.11 +
+    availableNow * 0.13 +
+    clusterSupport * 0.08 +
     ratingConfidence * 0.09 +
-    diversity * 0.08 +
-    runtimeFit * 0.06 +
-    eraFit * 0.05 +
-    novelty * 0.03 +
-    householdFit * 0.06 +
-    requestable * 0.02 +
-    groupPreferenceFit * 0.06 +
+    tasteGenreFit * 0.22 +
+    runtimeFit * 0.04 +
+    eraFit * 0.03 +
+    mainstreamSafety * 0.14 +
+    householdFit * 0.03 +
+    requestable * 0.01 +
+    groupPreferenceFit * 0.1 +
     householdHistoryFit * 0.02;
+  const matchingGenres = item.genres.filter(
+    (genre) => (tasteGenres.get(genre.toLocaleLowerCase()) ?? 0) > 0,
+  );
   const reasons = [
     candidate.relatedSeedKeys.length > 1
       ? `Similar to ${candidate.relatedSeedKeys.length} group picks`
@@ -137,8 +165,8 @@ function scoreCandidate(
     item.runtimeMinutes
       ? `Fits a typical movie-night runtime at ${item.runtimeMinutes} minutes`
       : undefined,
-    diversity > 0.7 && primaryGenre !== "Unknown"
-      ? `Adds ${primaryGenre.toLowerCase()} variety`
+    tasteGenreFit >= 0.5 && matchingGenres.length
+      ? `Matches the group's ${matchingGenres.slice(0, 2).join(" and ").toLowerCase()} taste`
       : undefined,
     candidate.sourceKinds.includes("RECOMMENDATIONS")
       ? "Recommended by TMDB"
@@ -149,6 +177,9 @@ function scoreCandidate(
         ? "Matches a player's Plex tastes"
         : undefined,
     householdHistoryFit ? "Fits household viewing history" : undefined,
+    tasteStrength < 0.35 && mainstreamConfidence >= 0.65
+      ? "Popular, well-established fallback"
+      : undefined,
   ].filter((reason): reason is string => Boolean(reason));
   return {
     scoreComponents,
@@ -159,6 +190,22 @@ function scoreCandidate(
       Math.round(stableTie(roomSeed, item.catalogKey) * 99),
     primaryGenre,
   };
+}
+
+export function interleavePlexPreferences(
+  people: Array<{
+    participantId: string;
+    items: Array<{ tmdbId: number; mediaType: "MOVIE" | "TV" }>;
+  }>,
+) {
+  const interleaved: Array<{ tmdbId: number; mediaType: "MOVIE" | "TV" }> = [];
+  const longestList = Math.max(0, ...people.map((person) => person.items.length));
+  for (let index = 0; index < longestList; index += 1)
+    for (const person of people) {
+      const item = person.items[index];
+      if (item) interleaved.push(item);
+    }
+  return interleaved;
 }
 
 export async function prepareTmdbWildcards(
@@ -226,11 +273,10 @@ export async function prepareTmdbWildcards(
   for (const item of direct)
     if (item.tmdbId)
       seedEntries.set(item.catalogKey, { tmdbId: item.tmdbId, mediaType: item.mediaType });
-  for (const person of plexPreferences.participants)
-    for (const item of person.items) {
-      const key = `tmdb:${item.mediaType}:${item.tmdbId}`;
-      if (!seedEntries.has(key)) seedEntries.set(key, item);
-    }
+  for (const item of interleavePlexPreferences(plexPreferences.participants)) {
+    const key = `tmdb:${item.mediaType}:${item.tmdbId}`;
+    if (!seedEntries.has(key)) seedEntries.set(key, item);
+  }
   for (const item of tautulliHistory.items)
     if (item.tmdbId && item.mediaType) {
       const key = `tmdb:${item.mediaType}:${item.tmdbId}`;
@@ -261,6 +307,7 @@ export async function prepareTmdbWildcards(
         }))
         .filter(
           (candidate) =>
+            isEnglishRecommendation(candidate) &&
             !directKeys.has(candidate.item.catalogKey) &&
             eligibilityFailures(candidate.item, rules).length === 0,
         )
@@ -291,14 +338,19 @@ export async function prepareTmdbWildcards(
         household.recentExclusionDays,
       )
     : new Set<string>();
-  const directGenres = new Map<string, number>();
+  const tasteGenres = new Map<string, number>();
   for (const item of direct) {
-    const genre =
-      Array.isArray(item.genres) && typeof item.genres[0] === "string"
-        ? item.genres[0]
-        : undefined;
-    if (genre) directGenres.set(genre, (directGenres.get(genre) ?? 0) + 1);
+    const genres = Array.isArray(item.genres)
+      ? item.genres.filter((genre): genre is string => typeof genre === "string")
+      : [];
+    for (const genre of genres) {
+      const key = genre.toLocaleLowerCase();
+      tasteGenres.set(key, (tasteGenres.get(key) ?? 0) + 1);
+    }
   }
+  const tasteParticipantCount = new Set(
+    [...preferenceOwners.values()].flatMap((owners) => [...owners]),
+  ).size;
   const ranked = canonical
     .flatMap((candidate) => {
       const mediaItemId = idByKey.get(candidate.item.catalogKey);
@@ -309,11 +361,12 @@ export async function prepareTmdbWildcards(
           catalogKey: candidate.item.catalogKey,
           ...scoreCandidate(
             candidate,
-            directGenres,
+            tasteGenres,
             room.randomSeed,
             room.createdAt.getUTCFullYear(),
             preferenceOwners,
             householdHistorySeedKeys,
+            tasteParticipantCount,
           ),
         },
       ];
@@ -326,8 +379,9 @@ export async function prepareTmdbWildcards(
   const selected: typeof ranked = [];
   const deferred: typeof ranked = [];
   const genreCounts = new Map<string, number>();
+  const primaryGenreLimit = Math.max(3, Math.ceil(limit / 2));
   for (const item of rankedByFreshness) {
-    if ((genreCounts.get(item.primaryGenre) ?? 0) >= 3) deferred.push(item);
+    if ((genreCounts.get(item.primaryGenre) ?? 0) >= primaryGenreLimit) deferred.push(item);
     else {
       selected.push(item);
       genreCounts.set(

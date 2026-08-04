@@ -3,6 +3,7 @@ import {
   absoluteCatalogArtwork,
   pausedNominationSeconds,
   restoredNominationDeadline,
+  selectVariedSuggestions,
 } from "./nominations.js";
 
 describe("nomination auto-start grace period", () => {
@@ -28,5 +29,20 @@ describe("nomination auto-start grace period", () => {
     expect(restoredNominationDeadline(now, 0).toISOString()).toBe(
       "2026-08-03T00:00:01.000Z",
     );
+  });
+
+  it("varies Plex suggestions between rooms but keeps a room stable", () => {
+    const suggestions = Array.from({ length: 20 }, (_, index) => ({
+      catalogKey: `tmdb:movie:${index + 1}`,
+    }));
+
+    const firstRoom = selectVariedSuggestions(suggestions, "room-one:viewer", 12);
+    const sameRoom = selectVariedSuggestions(suggestions, "room-one:viewer", 12);
+    const nextRoom = selectVariedSuggestions(suggestions, "room-two:viewer", 12);
+
+    expect(sameRoom).toEqual(firstRoom);
+    expect(nextRoom).not.toEqual(firstRoom);
+    expect(new Set(firstRoom.map((item) => item.catalogKey))).toHaveLength(12);
+    expect(suggestions[0]?.catalogKey).toBe("tmdb:movie:1");
   });
 });

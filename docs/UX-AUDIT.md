@@ -21,6 +21,7 @@ Audited across mobile controller, host lobby, joining, nominations, voting, winn
 | Nominations | Poster, slot, and drag instructions described multiple interaction models | Tapping a poster now fills the next empty slot; once full, explicit replace-pick actions appear |
 | Search | The purpose of search was less prominent than mechanics | Led with `Choose your top 2`, made autocomplete clear through immediate poster results, and removed visible interaction instructions |
 | Suggestions | Plex watchlist was the only personal source shown | Added Plex watchlist plus recommendations informed by Plex and household Tautulli history |
+| Suggestions | Personalized picks repeated in the same fixed order across movie nights | Mixes a larger eligible pool with the room seed, giving each bracket a fresh but stable set without additional provider requests |
 | Voting | Generic `Lock in pick` required the player to map the selected poster back to the action | The button now says `Vote for [title]`; tapping posters remains the selection action |
 | Active room | Room status appeared locked even though late voting is supported | State now says when late voters can join and when picks are in progress |
 | TV pairing | Pairing copy described how the host generated the code | The screen now asks only for the code shown on the host phone |

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { and, eq, isNull, ne, sql } from 'drizzle-orm';
 import { auditEvents, availabilitySnapshots, households, mediaItems, participants, rooms, submissions } from '@watch-bracket/db';
 import { mockCatalog, searchMockCatalog, searchSeededCatalogSnapshot, seededCatalogSnapshot, seededCatalogSnapshotCapturedAt } from '@watch-bracket/mock-catalog';
@@ -126,8 +126,26 @@ const suggestionDto = (item: CanonicalMediaItem) => ({
   requestAvailability: item.requestAvailability,
 });
 
+export function selectVariedSuggestions<T extends { catalogKey: string }>(
+  items: T[],
+  seed: string,
+  limit: number,
+) {
+  return [...items]
+    .sort((left, right) => {
+      const leftScore = createHash('sha256')
+        .update(`${seed}:${left.catalogKey}`)
+        .digest('hex');
+      const rightScore = createHash('sha256')
+        .update(`${seed}:${right.catalogKey}`)
+        .digest('hex');
+      return leftScore.localeCompare(rightScore) || left.catalogKey.localeCompare(right.catalogKey);
+    })
+    .slice(0, Math.max(0, limit));
+}
+
 export async function plexPersonalizedSuggestions(ctx: DomainContext, roomId: string, participantId: string) {
-  const [room] = await ctx.db.select({ rules: rooms.rules, householdId: rooms.householdId }).from(rooms).where(eq(rooms.id, roomId)).limit(1);
+  const [room] = await ctx.db.select({ rules: rooms.rules, householdId: rooms.householdId, randomSeed: rooms.randomSeed }).from(rooms).where(eq(rooms.id, roomId)).limit(1);
   if (!room) throw new DomainError('ROOM_NOT_FOUND', 'Room not found.', 404);
   const [household] = await ctx.db.select({ region: households.region }).from(households).where(eq(households.id, room.householdId)).limit(1);
   const region = household?.region ?? 'CA';
@@ -147,15 +165,23 @@ export async function plexPersonalizedSuggestions(ctx: DomainContext, roomId: st
   if (seeds.length) {
     const result = await recommendFromTmdb(ctx, { seeds, region, limit: 20 });
     const watchlistKeys = new Set(watchlist.map((item) => item.catalogKey));
-    recommended = (await enrichWithHouseholdProviders(ctx, result.candidates.map((candidate) => candidate.item)))
-      .filter((item) => !watchlistKeys.has(item.catalogKey) && eligibilityFailures(item, rules).length === 0)
-      .slice(0, 12);
+    const recommendationPool = (await enrichWithHouseholdProviders(ctx, result.candidates.map((candidate) => candidate.item)))
+      .filter((item) => !watchlistKeys.has(item.catalogKey) && eligibilityFailures(item, rules).length === 0);
+    recommended = selectVariedSuggestions(
+      recommendationPool,
+      `${room.randomSeed}:${participantId}:recommended`,
+      12,
+    );
     await cacheTmdbItems(ctx, recommended, result.cachedUntil, roomId);
   }
   await cacheTmdbItems(ctx, watchlist, new Date(Date.now() + 6 * 60 * 60_000).toISOString(), roomId);
   return {
     source: 'PLEX' as const,
-    watchlist: watchlist.map(suggestionDto),
+    watchlist: selectVariedSuggestions(
+      watchlist,
+      `${room.randomSeed}:${participantId}:watchlist`,
+      12,
+    ).map(suggestionDto),
     recommended: recommended.map(suggestionDto),
     tasteSource: historyResult.items.length ? 'PLEX_AND_TAUTULLI' as const : 'PLEX' as const,
   };

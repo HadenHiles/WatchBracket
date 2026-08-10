@@ -5,8 +5,8 @@
 1. Record the current Git revision and running image IDs with `git rev-parse HEAD` and `docker compose images --quiet`.
 2. Create and independently verify a database backup using `docs/BACKUP-RESTORE.md`.
 3. Fetch the intended signed/tagged revision. Review release notes and migrations before changing the checkout.
-4. Build images without stopping the current stack: `docker compose --env-file .env.production -f compose.prod.yml build`.
-5. Start the stack. The one-shot migration container must complete before either private service becomes ready.
+4. Build images without stopping the current stack: `docker compose build`.
+5. Start the stack with `docker compose up -d`. The one-shot migration container must complete before either private service becomes ready.
 6. Verify container health, public security headers, integration health, room creation, live join updates, and Presentation Test Mode in a non-production build.
 
 ## Rollback

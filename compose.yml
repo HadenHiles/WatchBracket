@@ -1,4 +1,6 @@
-# Production is the default Compose application. First-time setup only needs
-# private environment files and the external edge network described in README.
+# Production is the default Compose application. The included stack loads its
+# interpolation values from the private production environment file so normal
+# operations do not require command-line flags.
 include:
   - path: compose.prod.yml
+    env_file: .env.production

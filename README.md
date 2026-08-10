@@ -27,12 +27,12 @@ Install Docker Engine with Docker Compose, then:
 ```sh
 git clone https://github.com/HadenHiles/WatchBracket.git
 cd WatchBracket
-cp .env.example .env
+cp .env.example .env.production
 cp .env.integration.example .env.integration.production
 docker network create watchbracket_edge
 ```
 
-Edit the two private environment files and replace every `replace-me` value. Set `PUBLIC_APP_URL`, `PUBLIC_ALIAS_URL`, the administrator email, and any media-server credentials for your installation. Both files are ignored by Git.
+Edit the two private environment files and replace every `replace-me` value. Set `PUBLIC_APP_URL`, `PUBLIC_ALIAS_URL`, the administrator email, and any media-server credentials for your installation. Both files are ignored by Git. The default `compose.yml` automatically loads `.env.production`, so routine Compose commands do not need `--env-file` or `-f` options.
 
 For winner buttons that work outside your home network, set the internal and public addresses separately:
 

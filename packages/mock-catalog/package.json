@@ -5,5 +5,5 @@
   "type": "module",
   "exports": { ".": "./src/index.ts" },
   "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run" },
-  "devDependencies": { "typescript": "6.0.2", "vitest": "4.1.10" }
+  "devDependencies": { "typescript": "7.0.2", "vitest": "4.1.10" }
 }

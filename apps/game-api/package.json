@@ -6,9 +6,9 @@
   "scripts": { "dev": "tsx watch src/server.ts", "build": "tsup", "start": "node dist/server.js", "typecheck": "tsc --noEmit", "test": "vitest run" },
   "dependencies": {
     "@fastify/cookie": "11.1.2",
-    "@fastify/helmet": "13.1.0",
+    "@fastify/helmet": "13.1.1",
     "@fastify/rate-limit": "11.2.0",
-    "@node-rs/argon2": "2.0.2",
+    "@node-rs/argon2": "2.1.0",
     "@watch-bracket/config": "workspace:*",
     "@watch-bracket/db": "workspace:*",
     "@watch-bracket/display-protocol": "workspace:*",
@@ -18,9 +18,9 @@
     "@watch-bracket/shared": "workspace:*",
     "@watch-bracket/tournament-engine": "workspace:*",
     "drizzle-orm": "0.45.2",
-    "fastify": "5.11.0",
+    "fastify": "5.12.1",
     "socket.io": "4.8.3",
     "zod": "4.4.3"
   },
-  "devDependencies": { "@types/node": "24.3.0", "tsx": "4.20.4", "tsup": "8.5.1", "typescript": "6.0.2", "vitest": "4.1.10" }
+  "devDependencies": { "@types/node": "26.2.0", "tsx": "4.23.12", "tsup": "8.5.1", "typescript": "7.0.2", "vitest": "4.1.11" }
 }

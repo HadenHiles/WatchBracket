@@ -7,12 +7,12 @@
     "@watch-bracket/display-protocol": "workspace:*",
     "@watch-bracket/display-ui": "workspace:*",
     "@watch-bracket/realtime-protocol": "workspace:*",
-    "next": "16.2.12",
+    "next": "16.3.6",
     "qrcode.react": "4.2.0",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "socket.io-client": "4.8.3",
-    "zod": "4.4.3"
+    "zod": "4.6.5"
   },
-  "devDependencies": { "@types/node": "24.3.0", "@types/react": "19.1.10", "@types/react-dom": "19.1.7", "typescript": "6.0.2" }
+  "devDependencies": { "@types/node": "26.6.2", "@types/react": "19.3.0", "@types/react-dom": "19.3.0", "typescript": "7.0.2" }
 }

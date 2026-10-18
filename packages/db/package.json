@@ -10,7 +10,7 @@
     "db:migrate": "tsx src/migrate.ts",
     "db:studio": "drizzle-kit studio"
   },
-  "dependencies": { "drizzle-orm": "0.45.2", "postgres": "3.4.9" },
-  "devDependencies": { "drizzle-kit": "0.31.10", "tsx": "4.20.4", "typescript": "6.0.2" }
+  "dependencies": { "drizzle-orm": "0.45.4", "postgres": "3.4.9" },
+  "devDependencies": { "drizzle-kit": "0.31.11", "tsx": "4.23.15", "typescript": "7.0.2" }
 }
 
